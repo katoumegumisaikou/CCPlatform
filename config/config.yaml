@@ -1,0 +1,28 @@
+server:
+  port: 8080
+  mode: debug
+
+database:
+  host: 127.0.0.1
+  port: 3306
+  user: root
+  password: root
+  dbname: ccplatform
+  charset: utf8mb4
+  max_idle_conns: 10
+  max_open_conns: 100
+
+mqtt:
+  port: 1883
+  ws_port: 8083
+
+jwt:
+  secret: tdw-ccplatform-secret-key-2026
+  expire_hours: 24
+
+log:
+  level: info
+  filename: logs/app.log
+  max_size: 100
+  max_backups: 5
+  max_age: 30
