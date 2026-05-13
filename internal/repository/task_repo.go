@@ -87,3 +87,23 @@ func (r *TaskRepo) GetRunningTasks() ([]model.Task, error) {
 	err := r.db.Where("task_status = 1").Find(&tasks).Error
 	return tasks, err
 }
+
+// CountRunning 统计执行中的任务数量（task_status=1），用于仪表盘展示。
+func (r *TaskRepo) CountRunning() (int64, error) {
+	var count int64
+	err := r.db.Model(&model.Task{}).Where("task_status = 1").Count(&count).Error
+	return count, err
+}
+
+// SumTodayCleanArea 统计今日已完成任务的累计清扫面积（㎡），用于仪表盘展示。
+// 仅统计 task_status=2（已完成）且 actual_end 在今天的任务。
+func (r *TaskRepo) SumTodayCleanArea() (float64, error) {
+	var result struct {
+		Total float64
+	}
+	err := r.db.Model(&model.Task{}).
+		Where("task_status = 2 AND DATE(actual_end) = CURDATE()").
+		Select("COALESCE(SUM(clean_area), 0) as total").
+		Scan(&result).Error
+	return result.Total, err
+}

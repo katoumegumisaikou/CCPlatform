@@ -54,11 +54,21 @@ func (s *MonitorService) GetDashboard() (*DashboardOverview, error) {
 		return nil, err
 	}
 
+	todayCleanArea, err := s.taskRepo.SumTodayCleanArea()
+	if err != nil {
+		return nil, err
+	}
+
+	runningTasks, err := s.taskRepo.CountRunning()
+	if err != nil {
+		return nil, err
+	}
+
 	return &DashboardOverview{
 		StationCount:    int64(len(stations)),
 		RobotStats:      robotStats,
-		TodayCleanArea:  0, // TODO: 按日期统计清扫面积
-		RunningTasks:    0, // TODO: 统计执行中任务数
+		TodayCleanArea:  todayCleanArea,
+		RunningTasks:    runningTasks,
 		UnhandledAlarms: unhandled,
 		AlarmStats:      alarmStats,
 	}, nil
@@ -68,6 +78,8 @@ func (s *MonitorService) GetDashboard() (*DashboardOverview, error) {
 type StationRealtime struct {
 	StationID   string          `json:"station_id"`   // 电站 ID
 	StationName string          `json:"station_name"` // 电站名称
+	Longitude   float64         `json:"longitude"`    // 经度
+	Latitude    float64         `json:"latitude"`     // 纬度
 	Robots      []RobotRealtime `json:"robots"`       // 机器人实时数据列表
 }
 
@@ -120,6 +132,8 @@ func (s *MonitorService) GetRealtimeData(stationID string) (*StationRealtime, er
 	return &StationRealtime{
 		StationID:   station.StationID,
 		StationName: station.StationName,
+		Longitude:   station.Longitude,
+		Latitude:    station.Latitude,
 		Robots:      robotRealtimes,
 	}, nil
 }
