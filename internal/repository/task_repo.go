@@ -22,7 +22,7 @@ func (r *TaskRepo) Create(task *model.Task) error {
 }
 
 // GetByID 根据任务 ID 查询单条记录。
-func (r *TaskRepo) GetByID(id string) (*model.Task, error) {
+func (r *TaskRepo) GetByID(id uint) (*model.Task, error) {
 	var task model.Task
 	err := r.db.Where("task_id = ?", id).First(&task).Error
 	return &task, err
@@ -34,7 +34,7 @@ func (r *TaskRepo) Update(task *model.Task) error {
 }
 
 // Delete 根据任务 ID 删除记录。
-func (r *TaskRepo) Delete(id string) error {
+func (r *TaskRepo) Delete(id uint) error {
 	return r.db.Where("task_id = ?", id).Delete(&model.Task{}).Error
 }
 
@@ -59,7 +59,7 @@ func (r *TaskRepo) List(page, size int, stationID, robotID string, taskStatus in
 }
 
 // UpdateStatus 更新任务状态，用于任务状态流转（待执行→执行中→已完成等）。
-func (r *TaskRepo) UpdateStatus(id string, status int8) error {
+func (r *TaskRepo) UpdateStatus(id uint, status int8) error {
 	return r.db.Model(&model.Task{}).Where("task_id = ?", id).Update("task_status", status).Error
 }
 

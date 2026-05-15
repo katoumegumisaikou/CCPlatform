@@ -52,7 +52,7 @@ CREATE TABLE IF NOT EXISTS robots (
 
 -- 清扫任务表
 CREATE TABLE IF NOT EXISTS tasks (
-    task_id VARCHAR(32) PRIMARY KEY,
+    task_id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     task_name VARCHAR(100) COMMENT '任务名称',
     task_type TINYINT NOT NULL COMMENT '任务类型:1即时2定时3周期',
     robot_id VARCHAR(32) COMMENT '执行机器人ID',
@@ -130,5 +130,5 @@ ON DUPLICATE KEY UPDATE role_name = VALUES(role_name);
 
 -- 插入默认管理员(密码: admin123)
 INSERT INTO users (user_id, username, password_hash, real_name, role_id, status) VALUES
-('admin01', 'admin', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', '系统管理员', 'sys_admin', 1)
+('admin01', 'admin', '$2b$10$iZB4HLEY0uaS4bOmB0bsVe.Qz./gS6Jm8t0csVzMMLNkJDIROoCsK', '系统管理员', 'sys_admin', 1)
 ON DUPLICATE KEY UPDATE username = VALUES(username);

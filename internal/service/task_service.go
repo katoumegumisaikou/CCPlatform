@@ -31,7 +31,7 @@ func (s *TaskService) Create(task *model.Task) error {
 }
 
 // GetByID 根据 ID 查询任务详情。
-func (s *TaskService) GetByID(id string) (*model.Task, error) {
+func (s *TaskService) GetByID(id uint) (*model.Task, error) {
 	return s.repo.GetByID(id)
 }
 
@@ -41,7 +41,7 @@ func (s *TaskService) Update(task *model.Task) error {
 }
 
 // Delete 删除任务。
-func (s *TaskService) Delete(id string) error {
+func (s *TaskService) Delete(id uint) error {
 	return s.repo.Delete(id)
 }
 
@@ -62,7 +62,7 @@ func (s *TaskService) List(page, size int, stationID, robotID string, taskStatus
 //	0(待执行) → 1(执行中) → 2(已完成)
 //	0(待执行) → 3(已暂停) → 4(已取消)
 //	1(执行中) → 4(已取消)
-func (s *TaskService) UpdateStatus(taskID string, status int8) error {
+func (s *TaskService) UpdateStatus(taskID uint, status int8) error {
 	task, err := s.repo.GetByID(taskID)
 	if err != nil {
 		return fmt.Errorf("task not found: %w", err)

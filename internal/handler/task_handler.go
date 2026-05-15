@@ -41,8 +41,8 @@ func (h *TaskHandler) List(c *gin.Context) {
 // GetByID 任务详情接口。
 // GET /api/v1/tasks/:id
 func (h *TaskHandler) GetByID(c *gin.Context) {
-	id := c.Param("id")
-	task, err := h.svc.GetByID(id)
+	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+	task, err := h.svc.GetByID(uint(id))
 	if err != nil {
 		response.Error(c, errcode.ErrNotFound)
 		return
@@ -92,13 +92,13 @@ type UpdateTaskStatusRequest struct {
 // UpdateStatus 任务状态变更接口，包含状态机校验。
 // PUT /api/v1/tasks/:id/status
 func (h *TaskHandler) UpdateStatus(c *gin.Context) {
-	id := c.Param("id")
+	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	var req UpdateTaskStatusRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, errcode.ErrParam)
 		return
 	}
-	if err := h.svc.UpdateStatus(id, req.Status); err != nil {
+	if err := h.svc.UpdateStatus(uint(id), req.Status); err != nil {
 		response.ErrorMsg(c, 400, 10010, err.Error())
 		return
 	}
@@ -108,8 +108,8 @@ func (h *TaskHandler) UpdateStatus(c *gin.Context) {
 // Delete 删除任务接口。
 // DELETE /api/v1/tasks/:id
 func (h *TaskHandler) Delete(c *gin.Context) {
-	id := c.Param("id")
-	if err := h.svc.Delete(id); err != nil {
+	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err := h.svc.Delete(uint(id)); err != nil {
 		response.Error(c, errcode.ErrInternal)
 		return
 	}

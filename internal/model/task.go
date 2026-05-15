@@ -8,7 +8,7 @@ import "time"
 //                         → 已暂停(3) → 已取消(4)
 //                         → 失败(5)
 type Task struct {
-	TaskID      string     `gorm:"primaryKey;type:varchar(32)" json:"task_id"`      // 任务唯一标识
+	TaskID      uint       `gorm:"primaryKey;autoIncrement" json:"task_id"`         // 任务唯一标识
 	TaskName    string     `gorm:"type:varchar(100)" json:"task_name"`              // 任务名称
 	TaskType    int8       `gorm:"type:tinyint;not null" json:"task_type"`          // 任务类型: 1即时 2定时 3周期
 	RobotID     string     `gorm:"type:varchar(32);index" json:"robot_id"`          // 执行机器人 ID
