@@ -365,9 +365,19 @@ func (h *MessageHandler) handleAlarm(robotID string, payload []byte) {
 		return
 	}
 
+	// 规则评估：抑制检查 + 升级检查
+	evalResult := h.evaluateAlarmRules(msg.AlarmType, robotID, robot.StationID, msg.AlarmLevel)
+	if evalResult != nil && !evalResult.ShouldCreate {
+		return
+	}
+	finalLevel := msg.AlarmLevel
+	if evalResult != nil && evalResult.Escalated {
+		finalLevel = evalResult.FinalLevel
+	}
+
 	alarm := &model.Alarm{
 		AlarmID:      generateAlarmID(),
-		AlarmLevel:   msg.AlarmLevel,
+		AlarmLevel:   finalLevel,
 		AlarmType:    msg.AlarmType,
 		RobotID:      robotID,
 		StationID:    robot.StationID,
@@ -378,16 +388,6 @@ func (h *MessageHandler) handleAlarm(robotID string, payload []byte) {
 	if err := h.alarmRepo.Create(alarm); err != nil {
 		log.Printf("[MQTT] Create alarm error: %v", err)
 		return
-	}
-
-	// 评估告警规则：查找匹配的启用规则，执行升级/抑制逻辑
-	ruleRepo := repository.NewAlarmRuleRepo()
-	rules, _ := ruleRepo.GetByAlarmType(msg.AlarmType)
-	for _, rule := range rules {
-		if rule.Status == 1 {
-			log.Printf("[MQTT] Alarm rule matched: %s for alarm %s", rule.RuleName, alarm.AlarmID)
-			break
-		}
 	}
 
 	// 通知分发：查找匹配的通知模板
@@ -466,4 +466,98 @@ func (h *MessageHandler) handleOTA(robotID string, payload []byte) {
 	}
 
 	log.Printf("[MQTT] OTA status for robot %s: status=%d", robotID, msg.Status)
+}
+
+// ===== 告警规则评估（内置于 handler，避免 mqtt ↔ service 循环引用）=====
+
+// escalationEntry 升级规则条目：在 within_min 分钟内发生 count 次同类型告警，则将级别升级到 to_level。
+type escalationEntry struct {
+	Count     int `json:"count"`
+	WithinMin int `json:"within_min"`
+	ToLevel   int8 `json:"to_level"`
+}
+
+// suppressionRule 抑制规则：同类型告警在 within_sec 秒内只生成一条。
+type suppressionRule struct {
+	WithinSec int `json:"within_sec"`
+}
+
+// alarmEvalResult 告警规则评估结果。
+type alarmEvalResult struct {
+	ShouldCreate bool
+	FinalLevel   int8
+	Escalated    bool
+}
+
+func (h *MessageHandler) evaluateAlarmRules(alarmType, robotID, stationID string, originalLevel int8) *alarmEvalResult {
+	ruleRepo := repository.NewAlarmRuleRepo()
+	rules, err := ruleRepo.GetByAlarmType(alarmType)
+	if err != nil || len(rules) == 0 {
+		return &alarmEvalResult{ShouldCreate: true, FinalLevel: originalLevel}
+	}
+
+	rule := pickMatchingRule(rules, robotID, stationID)
+	if rule == nil {
+		return &alarmEvalResult{ShouldCreate: true, FinalLevel: originalLevel}
+	}
+	result := &alarmEvalResult{ShouldCreate: true, FinalLevel: originalLevel}
+
+	// 1. 抑制检查
+	if rule.SuppressionRule != "" {
+		var suppr suppressionRule
+		if json.Unmarshal([]byte(rule.SuppressionRule), &suppr) == nil && suppr.WithinSec > 0 {
+			latestTime, err := h.alarmRepo.GetLatestAlarmTime(robotID, alarmType)
+			if err == nil && latestTime != nil && time.Since(*latestTime) < time.Duration(suppr.WithinSec)*time.Second {
+				log.Printf("[AlarmRule] Suppressed: %s robot=%s (window=%ds)", alarmType, robotID, suppr.WithinSec)
+				result.ShouldCreate = false
+				return result
+			}
+		}
+	}
+
+	// 2. 升级检查
+	if rule.EscalationRule != "" {
+		var entries []escalationEntry
+		if json.Unmarshal([]byte(rule.EscalationRule), &entries) == nil {
+			for _, entry := range entries {
+				count, err := h.alarmRepo.CountRecentByType(robotID, alarmType, entry.WithinMin)
+				if err == nil && int(count) >= entry.Count && entry.ToLevel > result.FinalLevel {
+					log.Printf("[AlarmRule] Escalated: %s robot=%s L%d→L%d (count=%d in %dmin)",
+						alarmType, robotID, result.FinalLevel, entry.ToLevel, count, entry.WithinMin)
+					result.FinalLevel = entry.ToLevel
+					result.Escalated = true
+					break
+				}
+			}
+		}
+	}
+
+	return result
+}
+
+// pickMatchingRule 按 robot > station > global 优先级选取最匹配的规则。
+func pickMatchingRule(rules []model.AlarmRule, robotID, stationID string) *model.AlarmRule {
+	var globalRule, stationRule, robotRule *model.AlarmRule
+	for i := range rules {
+		r := &rules[i]
+		switch r.ScopeType {
+		case "robot":
+			if r.ScopeID == robotID {
+				robotRule = r
+			}
+		case "station":
+			if r.ScopeID == stationID {
+				stationRule = r
+			}
+		default:
+			globalRule = r
+		}
+	}
+	if robotRule != nil {
+		return robotRule
+	}
+	if stationRule != nil {
+		return stationRule
+	}
+	return globalRule
 }

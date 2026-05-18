@@ -158,6 +158,27 @@ func (r *AlarmRepo) GetTopAlarmTypes(limit int) ([]map[string]interface{}, error
 	return results, err
 }
 
+// CountRecentByType 统计指定机器人在最近 N 分钟内同类型告警的数量，用于升级规则评估。
+func (r *AlarmRepo) CountRecentByType(robotID, alarmType string, withinMin int) (int64, error) {
+	var count int64
+	cutoff := time.Now().Add(-time.Duration(withinMin) * time.Minute)
+	err := r.db.Model(&model.Alarm{}).
+		Where("robot_id = ? AND alarm_type = ? AND alarm_time >= ?", robotID, alarmType, cutoff).
+		Count(&count).Error
+	return count, err
+}
+
+// GetLatestAlarmTime 获取指定机器人同类型告警的最近一条记录时间，用于抑制规则评估。
+func (r *AlarmRepo) GetLatestAlarmTime(robotID, alarmType string) (*time.Time, error) {
+	var alarm model.Alarm
+	err := r.db.Where("robot_id = ? AND alarm_type = ?", robotID, alarmType).
+		Order("alarm_time DESC").First(&alarm).Error
+	if err != nil {
+		return nil, err
+	}
+	return &alarm.AlarmTime, nil
+}
+
 // CountByStation 统计指定电站的未处理告警数量。
 func (r *AlarmRepo) CountByStation(stationID string) (int64, error) {
 	var count int64
