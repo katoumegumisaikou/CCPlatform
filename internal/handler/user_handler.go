@@ -2,6 +2,7 @@ package handler
 
 import (
 	"ccplatform/internal/model"
+	"ccplatform/internal/repository"
 	"ccplatform/internal/service"
 	"ccplatform/pkg/errcode"
 	"ccplatform/pkg/response"
@@ -12,13 +13,6 @@ import (
 
 // UserHandler 用户与角色 HTTP 处理器，处理认证、用户管理和角色管理。
 //
-// TODO: 密码重置 — 忘记密码/重置密码流程，短信验证码验证 (需求 7.1)
-// TODO: 角色更新/删除 API — PUT/DELETE /api/v1/roles/:id (需求 4.6.2)
-// TODO: 组织架构管理 — 多级组织结构 CRUD，电站归属关系 (需求 4.6.2)
-// TODO: 系统配置/字典管理 — 平台参数配置、数据字典 CRUD (需求 4.6.2)
-// TODO: 操作日志审计 — 操作日志/登录日志的记录、查询和导出 (需求 4.6.2)
-// TODO: 数据备份 — 备份策略配置、手动/自动备份、备份恢复 (需求 4.6.2)
-// TODO: 验证码功能 — 图形验证码、短信验证码 (需求 7.1)
 type UserHandler struct {
 	svc *service.UserService
 }
@@ -42,7 +36,7 @@ func (h *UserHandler) Login(c *gin.Context) {
 		response.Error(c, errcode.ErrParam)
 		return
 	}
-	token, err := h.svc.Login(req.Username, req.Password)
+	token, err := h.svc.Login(req.Username, req.Password, c.ClientIP())
 	if err != nil {
 		response.Error(c, errcode.ErrLoginFailed)
 		return
@@ -210,4 +204,183 @@ func (h *UserHandler) CreateRole(c *gin.Context) {
 		return
 	}
 	response.OK(c, role)
+}
+
+// UpdateRole 更新角色接口（部分更新）。
+// PUT /api/v1/roles/:id
+func (h *UserHandler) UpdateRole(c *gin.Context) {
+	id := c.Param("id")
+	existing, err := h.svc.GetRoleByID(id)
+	if err != nil {
+		response.Error(c, errcode.ErrNotFound)
+		return
+	}
+	var req CreateRoleRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, errcode.ErrParam)
+		return
+	}
+	if req.RoleName != "" {
+		existing.RoleName = req.RoleName
+	}
+	if req.Description != "" {
+		existing.Description = req.Description
+	}
+	if req.Permissions != "" {
+		existing.Permissions = req.Permissions
+	}
+	existing.RoleID = id
+	if err := h.svc.UpdateRole(existing); err != nil {
+		response.Error(c, errcode.ErrInternal)
+		return
+	}
+	response.OK(c, existing)
+}
+
+// DeleteRole 删除角色接口。
+// DELETE /api/v1/roles/:id
+func (h *UserHandler) DeleteRole(c *gin.Context) {
+	id := c.Param("id")
+	if err := h.svc.DeleteRole(id); err != nil {
+		response.Error(c, errcode.ErrNotFound)
+		return
+	}
+	response.OK(c, nil)
+}
+
+// ListLoginLogs 登录日志列表接口。
+// GET /api/v1/login-logs?page=1&size=10&user_id=xx&start_time=xx&end_time=xx
+func (h *UserHandler) ListLoginLogs(c *gin.Context) {
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	size, _ := strconv.Atoi(c.DefaultQuery("size", "10"))
+	userID := c.Query("user_id")
+	startTime := c.Query("start_time")
+	endTime := c.Query("end_time")
+
+	loginLogRepo := repository.NewLoginLogRepo()
+	logs, total, err := loginLogRepo.List(page, size, userID, startTime, endTime)
+	if err != nil {
+		response.Error(c, errcode.ErrInternal)
+		return
+	}
+	response.OKPage(c, logs, total, page, size)
+}
+
+// ForgotPasswordRequest 忘记密码请求体。
+type ForgotPasswordRequest struct {
+	Username string `json:"username" binding:"required"`
+}
+
+// ForgotPassword 忘记密码接口。
+// POST /api/v1/auth/forgot-password
+func (h *UserHandler) ForgotPassword(c *gin.Context) {
+	var req ForgotPasswordRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, errcode.ErrParam)
+		return
+	}
+	token, err := h.svc.ForgotPassword(req.Username)
+	if err != nil {
+		response.ErrorMsg(c, 400, 10001, err.Error())
+		return
+	}
+	response.OK(c, gin.H{"message": "reset token generated", "reset_token": token})
+}
+
+// ResetPasswordRequest 重置密码请求体。
+type ResetPasswordRequest struct {
+	Token       string `json:"token" binding:"required"`
+	NewPassword string `json:"new_password" binding:"required"`
+}
+
+// ResetPassword 重置密码接口。
+// POST /api/v1/auth/reset-password
+func (h *UserHandler) ResetPassword(c *gin.Context) {
+	var req ResetPasswordRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, errcode.ErrParam)
+		return
+	}
+	if err := h.svc.ResetPassword(req.Token, req.NewPassword); err != nil {
+		response.ErrorMsg(c, 400, 10001, err.Error())
+		return
+	}
+	response.OK(c, gin.H{"message": "password reset successfully"})
+}
+
+// CaptchaService is a global instance for the captcha service.
+var captchaSvc = service.NewCaptchaService()
+
+// GetCaptcha 获取图形验证码接口。
+// GET /api/v1/auth/captcha
+func (h *UserHandler) GetCaptcha(c *gin.Context) {
+	id, question, _, err := captchaSvc.GenerateCaptcha()
+	if err != nil {
+		response.Error(c, errcode.ErrInternal)
+		return
+	}
+	response.OK(c, gin.H{"captcha_id": id, "question": question})
+}
+
+// VerifyCaptchaRequest 验证码校验请求体。
+type VerifyCaptchaRequest struct {
+	CaptchaID string `json:"captcha_id" binding:"required"`
+	Answer    string `json:"answer" binding:"required"`
+}
+
+// VerifyCaptcha 验证图形验证码接口。
+// POST /api/v1/auth/verify-captcha
+func (h *UserHandler) VerifyCaptcha(c *gin.Context) {
+	var req VerifyCaptchaRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, errcode.ErrParam)
+		return
+	}
+	if !captchaSvc.VerifyCaptcha(req.CaptchaID, req.Answer) {
+		response.Error(c, errcode.ErrCaptchaError)
+		return
+	}
+	response.OK(c, gin.H{"message": "verified"})
+}
+
+// SmsCodeRequest 短信验证码请求体。
+type SmsCodeRequest struct {
+	Phone string `json:"phone" binding:"required"`
+}
+
+// SendSmsCode 发送短信验证码接口。
+// POST /api/v1/auth/sms-code
+func (h *UserHandler) SendSmsCode(c *gin.Context) {
+	var req SmsCodeRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, errcode.ErrParam)
+		return
+	}
+	code, err := captchaSvc.GenerateSMSCode(req.Phone)
+	if err != nil {
+		response.Error(c, errcode.ErrSmsSendFailed)
+		return
+	}
+	response.OK(c, gin.H{"message": "sms code sent", "code": code})
+}
+
+// VerifySmsRequest 短信验证码校验请求体。
+type VerifySmsRequest struct {
+	Phone string `json:"phone" binding:"required"`
+	Code  string `json:"code" binding:"required"`
+}
+
+// VerifySms 验证短信验证码接口。
+// POST /api/v1/auth/verify-sms
+func (h *UserHandler) VerifySms(c *gin.Context) {
+	var req VerifySmsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, errcode.ErrParam)
+		return
+	}
+	if !captchaSvc.VerifySMS(req.Phone, req.Code) {
+		response.Error(c, errcode.ErrCaptchaError)
+		return
+	}
+	response.OK(c, gin.H{"message": "verified"})
 }

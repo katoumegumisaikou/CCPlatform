@@ -9,10 +9,6 @@ import (
 
 // RobotRepo 机器人数据访问层，封装 robots 表的所有数据库操作。
 // 提供标准 CRUD 以及 MQTT 上行数据更新方法（心跳、位置、状态）。
-//
-// TODO: 位置历史查询 — 按时间段查询机器人坐标历史，用于轨迹回放 (需求 4.1.2)
-// TODO: 固件版本查询 — 机器人当前固件版本及升级历史 (需求 4.3)
-// TODO: 维护记录查询 — 按机器人查询维护历史 (需求 4.3)
 type RobotRepo struct {
 	db *gorm.DB
 }
@@ -134,6 +130,43 @@ func (r *RobotRepo) CountByStatus() (map[string]int64, error) {
 	result["fault"] = fault
 
 	return result, nil
+}
+
+// GetPositionHistory 查询机器人位置历史，用于轨迹回放。
+func (r *RobotRepo) GetPositionHistory(robotID, startTime, endTime string, limit int) ([]model.RobotPosition, error) {
+	var positions []model.RobotPosition
+	query := r.db.Model(&model.RobotPosition{})
+	if robotID != "" {
+		query = query.Where("robot_id = ?", robotID)
+	}
+	if startTime != "" {
+		query = query.Where("timestamp >= ?", startTime)
+	}
+	if endTime != "" {
+		query = query.Where("timestamp <= ?", endTime)
+	}
+	if limit <= 0 {
+		limit = 1000
+	}
+	err := query.Order("timestamp ASC").Limit(limit).Find(&positions).Error
+	return positions, err
+}
+
+// GetEnvironmentHistory 查询环境数据历史。
+func (r *RobotRepo) GetEnvironmentHistory(robotID, startTime, endTime string) ([]model.EnvironmentData, error) {
+	var data []model.EnvironmentData
+	query := r.db.Model(&model.EnvironmentData{})
+	if robotID != "" {
+		query = query.Where("robot_id = ?", robotID)
+	}
+	if startTime != "" {
+		query = query.Where("record_time >= ?", startTime)
+	}
+	if endTime != "" {
+		query = query.Where("record_time <= ?", endTime)
+	}
+	err := query.Order("record_time ASC").Limit(1000).Find(&data).Error
+	return data, err
 }
 
 // GetOnlineRobots 查询所有在线机器人，用于监控面板和实时数据推送。

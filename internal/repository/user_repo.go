@@ -40,6 +40,11 @@ func (r *UserRepo) Update(user *model.User) error {
 	return r.db.Save(user).Error
 }
 
+// UpdatePassword 更新用户密码哈希。
+func (r *UserRepo) UpdatePassword(userID, passwordHash string) error {
+	return r.db.Model(&model.User{}).Where("user_id = ?", userID).Update("password_hash", passwordHash).Error
+}
+
 // Delete 根据用户 ID 删除记录。
 func (r *UserRepo) Delete(id string) error {
 	return r.db.Where("user_id = ?", id).Delete(&model.User{}).Error

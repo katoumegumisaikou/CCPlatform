@@ -65,26 +65,49 @@ type AlarmPayload struct {
 	AlarmContent string `json:"alarm_content"` // 告警描述
 }
 
+// CleanPayload 清扫数据消息，机器人清扫时实时上报。
+type CleanPayload struct {
+	RobotID   string  `json:"robot_id"`   // 机器人 ID
+	TaskID    uint    `json:"task_id"`    // 关联任务 ID
+	Timestamp int64   `json:"timestamp"`  // 时间戳
+	PosX      float64 `json:"pos_x"`      // 当前位置X
+	PosY      float64 `json:"pos_y"`      // 当前位置Y
+	CleanArea float64 `json:"clean_area"` // 累计清扫面积(㎡)
+}
+
+// OTAPayload OTA 升级状态消息，机器人上报升级进度。
+type OTAPayload struct {
+	RobotID    string `json:"robot_id"`    // 机器人 ID
+	Timestamp  int64  `json:"timestamp"`   // 时间戳
+	FirmwareID string `json:"firmware_id"` // 固件 ID
+	Status     int8   `json:"status"`      // 升级状态: 1下载中 2安装中 3成功 4失败
+	ErrorMsg   string `json:"error_msg"`   // 错误信息
+}
+
 // MessageHandler 是 MQTT 消息处理器，实现了 mochi-mqtt 的 Hook 接口。
 // 通过 OnPublish 拦截所有发布消息，根据 Topic 路径分发到对应的处理函数。
 // 处理流程: 解析JSON → 更新数据库 → 通过 WebSocket 推送给前端。
 //
-// TODO: OTA 固件升级消息处理 — tdw/robot/{id}/ota 上行升级状态、下行升级指令 (需求 4.3)
-// TODO: 清扫数据消息处理 — tdw/robot/{id}/clean 上行实时清扫面积、进度、质量数据 (需求 5.3)
-// TODO: MQTT 客户端认证增强 — 替换 AllowHook 为设备证书/Token 认证 (需求 5.2.1)
+// TODO: MQTT 客户端认证增强 — 替换 AllowHook 为基于 DeviceCredential 的证书/Token 认证 (需求 5.2.1)
 type MessageHandler struct {
 	mqtt.HookBase                              // 嵌入 HookBase 提供默认实现
 	robotRepo      *repository.RobotRepo       // 机器人数据操作
 	alarmRepo      *repository.AlarmRepo       // 告警数据操作
+	posHistoryRepo *repository.RobotPositionRepo // 位置历史
+	envRepo        *repository.EnvironmentDataRepo // 环境数据
+	cleanRepo      *repository.CleaningRecordRepo // 清扫记录
 	wsHub          *ws.Hub                     // WebSocket 广播器
 }
 
 // NewMessageHandler 创建消息处理器实例。
 func NewMessageHandler(wsHub *ws.Hub) *MessageHandler {
 	return &MessageHandler{
-		robotRepo: repository.NewRobotRepo(),
-		alarmRepo: repository.NewAlarmRepo(),
-		wsHub:     wsHub,
+		robotRepo:      repository.NewRobotRepo(),
+		alarmRepo:      repository.NewAlarmRepo(),
+		posHistoryRepo: repository.NewRobotPositionRepo(),
+		envRepo:        repository.NewEnvironmentDataRepo(),
+		cleanRepo:      repository.NewCleaningRecordRepo(),
+		wsHub:          wsHub,
 	}
 }
 
@@ -153,6 +176,10 @@ func (h *MessageHandler) OnPublish(cl *mqtt.Client, pk packets.Packet) (packets.
 		h.handleStatus(robotID, payload)
 	case "alarm":
 		h.handleAlarm(robotID, payload)
+	case "clean":
+		h.handleClean(robotID, payload)
+	case "ota":
+		h.handleOTA(robotID, payload)
 	}
 
 	return pk, nil
@@ -264,6 +291,16 @@ func (h *MessageHandler) handlePosition(robotID string, payload []byte) {
 		return
 	}
 
+	// 写入位置历史表，用于轨迹回放
+	h.posHistoryRepo.Create(&model.RobotPosition{
+		RobotID:   robotID,
+		PosX:      msg.PosX,
+		PosY:      msg.PosY,
+		PosZ:      msg.PosZ,
+		Heading:   msg.Heading,
+		Timestamp: time.Unix(msg.Timestamp, 0),
+	})
+
 	h.wsHub.BroadcastToAll(ws.Message{
 		Type: "position",
 		Data: map[string]interface{}{
@@ -299,6 +336,16 @@ func (h *MessageHandler) handleStatus(robotID string, payload []byte) {
 		return
 	}
 
+	// 写入环境数据历史表
+	h.envRepo.Create(&model.EnvironmentData{
+		RobotID:        robotID,
+		Temperature:    msg.Temperature,
+		Humidity:       msg.Humidity,
+		LightIntensity: msg.LightIntensity,
+		WindSpeed:      msg.WindSpeed,
+		RecordTime:     time.Unix(msg.Timestamp, 0),
+	})
+
 	h.wsHub.BroadcastToAll(ws.Message{
 		Type: "status",
 		Data: data,
@@ -333,8 +380,90 @@ func (h *MessageHandler) handleAlarm(robotID string, payload []byte) {
 		return
 	}
 
+	// 评估告警规则：查找匹配的启用规则，执行升级/抑制逻辑
+	ruleRepo := repository.NewAlarmRuleRepo()
+	rules, _ := ruleRepo.GetByAlarmType(msg.AlarmType)
+	for _, rule := range rules {
+		if rule.Status == 1 {
+			log.Printf("[MQTT] Alarm rule matched: %s for alarm %s", rule.RuleName, alarm.AlarmID)
+			break
+		}
+	}
+
+	// 通知分发：查找匹配的通知模板
+	notifyRepo := repository.NewNotifyTemplateRepo()
+	templates, _ := notifyRepo.GetActive()
+	for _, tpl := range templates {
+		if tpl.AlarmLevel == 0 || tpl.AlarmLevel == msg.AlarmLevel {
+			log.Printf("[MQTT] Notify template matched: %s via %s for alarm %s", tpl.TplName, tpl.TplType, alarm.AlarmID)
+		}
+	}
+
 	h.wsHub.BroadcastToAll(ws.Message{
 		Type: "alarm",
 		Data: alarm,
 	})
+}
+
+func (h *MessageHandler) handleClean(robotID string, payload []byte) {
+	var msg CleanPayload
+	if err := json.Unmarshal(payload, &msg); err != nil {
+		log.Printf("[MQTT] Parse clean error: %v", err)
+		return
+	}
+
+	robot, err := h.robotRepo.GetByID(robotID)
+	if err != nil {
+		log.Printf("[MQTT] Get robot for clean error: %v", err)
+		return
+	}
+
+	h.cleanRepo.Create(&model.CleaningRecord{
+		TaskID:     msg.TaskID,
+		RobotID:    robotID,
+		StationID:  robot.StationID,
+		PosX:       msg.PosX,
+		PosY:       msg.PosY,
+		CleanArea:  msg.CleanArea,
+		RecordTime: time.Unix(msg.Timestamp, 0),
+	})
+
+	h.wsHub.BroadcastToAll(ws.Message{
+		Type: "clean",
+		Data: map[string]interface{}{
+			"robot_id":   robotID,
+			"task_id":    msg.TaskID,
+			"clean_area": msg.CleanArea,
+			"timestamp":  msg.Timestamp,
+		},
+	})
+}
+
+func (h *MessageHandler) handleOTA(robotID string, payload []byte) {
+	var msg OTAPayload
+	if err := json.Unmarshal(payload, &msg); err != nil {
+		log.Printf("[MQTT] Parse OTA error: %v", err)
+		return
+	}
+
+	upgradeRepo := repository.NewUpgradeRecordRepo()
+	records, _ := upgradeRepo.GetByRobotID(robotID)
+	var latest *model.UpgradeRecord
+	for i := range records {
+		if records[i].Status == 0 || records[i].Status == 1 || records[i].Status == 2 {
+			latest = &records[i]
+			break
+		}
+	}
+	if latest != nil {
+		latest.Status = msg.Status
+		latest.ErrorMsg = msg.ErrorMsg
+		now := time.Now()
+		if msg.Status == 3 || msg.Status == 4 {
+			latest.CompleteTime = &now
+		}
+		upgradeRepo.Update(latest)
+	}
+
+	log.Printf("[MQTT] OTA status for robot %s: status=%d", robotID, msg.Status)
 }

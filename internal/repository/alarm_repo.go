@@ -8,10 +8,7 @@ import (
 )
 
 // AlarmRepo 告警数据访问层，封装 alarms 表的所有数据库操作。
-// 提供告警的增删改查、处理状态更新、按级别统计等功能。
-//
-// TODO: 告警趋势查询 — 按类型/时段聚合统计，识别高频告警 (需求 4.4.2)
-// TODO: 告警规则存储 — 阈值规则、升级规则、抑制规则的 CRUD (需求 4.4.2)
+// 提供告警的增删改查、处理状态更新、按级别统计、趋势分析等功能。
 type AlarmRepo struct {
 	db *gorm.DB
 }
@@ -113,6 +110,52 @@ func (r *AlarmRepo) GetRecentAlarms(limit int) ([]model.Alarm, error) {
 	var alarms []model.Alarm
 	err := r.db.Order("alarm_time DESC").Limit(limit).Find(&alarms).Error
 	return alarms, err
+}
+
+// GetTrendByType 按告警类型统计数量，用于趋势分析。
+func (r *AlarmRepo) GetTrendByType(startTime, endTime string) ([]map[string]interface{}, error) {
+	var results []map[string]interface{}
+	query := r.db.Model(&model.Alarm{}).Select("alarm_type, count(*) as count").Group("alarm_type")
+	if startTime != "" {
+		query = query.Where("alarm_time >= ?", startTime)
+	}
+	if endTime != "" {
+		query = query.Where("alarm_time <= ?", endTime)
+	}
+	err := query.Order("count DESC").Find(&results).Error
+	return results, err
+}
+
+// GetTrendByTime 按时间聚合告警趋势。
+func (r *AlarmRepo) GetTrendByTime(granularity, startTime, endTime string) ([]map[string]interface{}, error) {
+	var results []map[string]interface{}
+	dateFmt := "%Y-%m-%d"
+	switch granularity {
+	case "month":
+		dateFmt = "%Y-%m"
+	case "hour":
+		dateFmt = "%Y-%m-%d %H:00"
+	}
+	query := r.db.Model(&model.Alarm{}).Select("DATE_FORMAT(alarm_time, ?) as period, count(*) as count", dateFmt).Group("period")
+	if startTime != "" {
+		query = query.Where("alarm_time >= ?", startTime)
+	}
+	if endTime != "" {
+		query = query.Where("alarm_time <= ?", endTime)
+	}
+	err := query.Order("period ASC").Find(&results).Error
+	return results, err
+}
+
+// GetTopAlarmTypes 获取高频告警类型 Top N。
+func (r *AlarmRepo) GetTopAlarmTypes(limit int) ([]map[string]interface{}, error) {
+	var results []map[string]interface{}
+	if limit <= 0 {
+		limit = 10
+	}
+	err := r.db.Model(&model.Alarm{}).Select("alarm_type, count(*) as count, station_id").
+		Group("alarm_type, station_id").Order("count DESC").Limit(limit).Find(&results).Error
+	return results, err
 }
 
 // CountByStation 统计指定电站的未处理告警数量。

@@ -4,6 +4,8 @@ import (
 	"ccplatform/internal/service"
 	"ccplatform/pkg/errcode"
 	"ccplatform/pkg/response"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -11,12 +13,6 @@ import (
 
 // AnalyticsHandler 数据分析 HTTP 处理器，提供经济技术指标和运行报表查询。
 //
-// TODO: 真实效率计算 — 覆盖率/重复率应从实际清扫轨迹数据计算，替换硬编码常量 (需求 4.5.2)
-// TODO: 对比分析 — 多电站/多机器人数据对比 API (需求 4.5.2)
-// TODO: 趋势预测 — 发电效率预测模型、故障预测模型、最优清扫策略模型 (需求 8.2)
-// TODO: 自定义报表 — 用户自定义报表模板和数据维度配置 (需求 4.5.2)
-// TODO: 报表导出 — 支持 Excel/PDF 格式导出 (需求 4.5.2)
-// TODO: 时间维度聚合 — 按日/周/月/年聚合的查询接口 (需求 4.5.2)
 type AnalyticsHandler struct {
 	svc *service.AnalyticsService
 }
@@ -84,4 +80,69 @@ func (h *AnalyticsHandler) GetRunReport(c *gin.Context) {
 		return
 	}
 	response.OK(c, report)
+}
+
+// GetComparison 多维度对比分析接口。
+// GET /api/v1/analytics/compare?dimension=station&ids=id1,id2
+func (h *AnalyticsHandler) GetComparison(c *gin.Context) {
+	dimension := c.DefaultQuery("dimension", "station")
+	idsStr := c.Query("ids")
+	if idsStr == "" {
+		response.Error(c, errcode.ErrParam)
+		return
+	}
+	ids := make([]string, 0)
+	for _, id := range strings.Split(idsStr, ",") {
+		if id = strings.TrimSpace(id); id != "" {
+			ids = append(ids, id)
+		}
+	}
+	data, err := h.svc.Compare(dimension, ids)
+	if err != nil {
+		response.Error(c, errcode.ErrInternal)
+		return
+	}
+	response.OK(c, data)
+}
+
+// ExportReport 报表导出接口，返回 CSV 格式。
+// GET /api/v1/analytics/export?station_id=xx&start_date=xx&end_date=xx
+func (h *AnalyticsHandler) ExportReport(c *gin.Context) {
+	stationID := c.Query("station_id")
+	if stationID == "" {
+		response.Error(c, errcode.ErrParam)
+		return
+	}
+	startDate := c.DefaultQuery("start_date", time.Now().AddDate(0, -1, 0).Format("2006-01-02"))
+	endDate := c.DefaultQuery("end_date", time.Now().Format("2006-01-02"))
+	start, _ := time.Parse("2006-01-02", startDate)
+	end, _ := time.Parse("2006-01-02", endDate)
+	rows, err := h.svc.ExportReport(stationID, start, end)
+	if err != nil {
+		response.Error(c, errcode.ErrNotFound)
+		return
+	}
+	var sb strings.Builder
+	for _, row := range rows {
+		sb.WriteString(strings.Join(row, ","))
+		sb.WriteString("\n")
+	}
+	c.Header("Content-Type", "text/csv; charset=utf-8")
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=report_%s.csv", stationID))
+	c.String(200, sb.String())
+}
+
+// GetTimeSeries 时间维度聚合接口。
+// GET /api/v1/analytics/timeseries?station_id=xx&granularity=day&start_time=xx&end_time=xx
+func (h *AnalyticsHandler) GetTimeSeries(c *gin.Context) {
+	stationID := c.Query("station_id")
+	granularity := c.DefaultQuery("granularity", "day")
+	startTime := c.Query("start_time")
+	endTime := c.Query("end_time")
+	data, err := h.svc.GetTimeSeries(stationID, granularity, startTime, endTime)
+	if err != nil {
+		response.Error(c, errcode.ErrInternal)
+		return
+	}
+	response.OK(c, data)
 }

@@ -10,9 +10,6 @@ import (
 )
 
 // StationService 电站业务逻辑层，处理电站的增删改查操作。
-//
-// TODO: 跨站对比分析 — 多电站数据横向对比 (需求 4.5.2)
-// TODO: 电站组织归属 — 与组织架构模型关联 (需求 4.6.2)
 type StationService struct {
 	repo *repository.StationRepo
 }

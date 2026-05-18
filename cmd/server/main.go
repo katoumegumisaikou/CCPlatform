@@ -17,6 +17,7 @@ import (
 	"ccplatform/internal/mqtt"
 	"ccplatform/internal/repository"
 	"ccplatform/internal/router"
+	"ccplatform/internal/scheduler"
 	"ccplatform/internal/service"
 	"ccplatform/internal/ws"
 	"fmt"
@@ -77,14 +78,18 @@ func main() {
 		log.Fatalf("Failed to register MQTT hooks: %v", err)
 	}
 
-	// 7. 创建 MQTT Publisher，用于下发控制指令到机器人
+	// 7. 启动周期任务调度器，用于定时/周期清扫任务
+	taskScheduler := scheduler.NewTaskScheduler()
+	go taskScheduler.Start()
+
+	// 8. 创建 MQTT Publisher，用于下发控制指令到机器人
 	//    Topic: tdw/robot/{id}/cmd 和 tdw/robot/{id}/config
 	publisher := mqtt.NewPublisher(mqtt.Server)
 
-	// 8. 注册所有 HTTP 路由（REST API）
+	// 9. 注册所有 HTTP 路由（REST API）
 	r := router.Setup(hub, publisher)
 
-	// 9. 启动 HTTP Server
+	// 10. 启动 HTTP Server
 	addr := fmt.Sprintf(":%d", config.Cfg.Server.Port)
 	srv := &http.Server{
 		Addr:         addr,
@@ -100,13 +105,14 @@ func main() {
 		}
 	}()
 
-	// 10. 阻塞等待 SIGINT/SIGTERM 信号，优雅关闭所有服务
+	// 11. 阻塞等待 SIGINT/SIGTERM 信号，优雅关闭所有服务
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
 	log.Println("Shutting down server...")
 
+	taskScheduler.Stop()
 	if mqtt.Server != nil {
 		mqtt.Server.Close()
 		log.Println("[MQTT] Broker stopped")
@@ -142,6 +148,25 @@ func initDB() error {
 		&model.Alarm{},
 		&model.User{},
 		&model.Role{},
+		&model.Firmware{},
+		&model.Maintenance{},
+		&model.AlarmRule{},
+		&model.NotifyTemplate{},
+		&model.AuditLog{},
+		&model.LoginLog{},
+		&model.SystemConfig{},
+		&model.Dict{},
+		&model.DictItem{},
+		&model.Organization{},
+		&model.RobotConfig{},
+		&model.RobotPosition{},
+		&model.EnvironmentData{},
+		&model.Camera{},
+		&model.CleaningRecord{},
+		&model.ReportTemplate{},
+		&model.DeviceCredential{},
+		&model.UpgradeRecord{},
+		&model.PasswordReset{},
 	); err != nil {
 		return fmt.Errorf("auto migrate: %w", err)
 	}

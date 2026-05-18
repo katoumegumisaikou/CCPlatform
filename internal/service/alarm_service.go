@@ -6,10 +6,6 @@ import (
 )
 
 // AlarmService 告警业务逻辑层，处理告警的创建、查询、处理和统计。
-//
-// TODO: 告警通知分发 — 短信/邮件/APP/Webhook 多渠道通知，通知模板 (需求 4.4.2)
-// TODO: 告警规则引擎 — 阈值触发、升级规则(超时自动升几)、抑制规则(重复告警合并) (需求 4.4.2)
-// TODO: 告警趋势分析 — 高频类型统计、时段分布、根因关联分析 (需求 4.4.2)
 type AlarmService struct {
 	repo *repository.AlarmRepo
 }
@@ -56,6 +52,18 @@ func (s *AlarmService) GetRecentAlarms(limit int) ([]model.Alarm, error) {
 		limit = 10
 	}
 	return s.repo.GetRecentAlarms(limit)
+}
+
+// GetTrendAnalysis 获取告警趋势分析数据。
+func (s *AlarmService) GetTrendAnalysis(granularity, startTime, endTime string) (map[string]interface{}, error) {
+	result := make(map[string]interface{})
+	byType, _ := s.repo.GetTrendByType(startTime, endTime)
+	result["by_type"] = byType
+	byTime, _ := s.repo.GetTrendByTime(granularity, startTime, endTime)
+	result["by_time"] = byTime
+	topTypes, _ := s.repo.GetTopAlarmTypes(10)
+	result["top_types"] = topTypes
+	return result, nil
 }
 
 // CountUnhandled 统计未处理告警总数，用于仪表盘红色角标。

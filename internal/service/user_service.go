@@ -11,12 +11,6 @@ import (
 
 // UserService 用户与角色业务逻辑层，处理用户认证、RBAC 权限和系统初始化。
 //
-// TODO: 密码重置流程 — 忘记密码/邮件重置/短信验证码重置 (需求 7.1)
-// TODO: 组织架构管理 — 多级组织结构(公司/区域/电站)，与电站关联 (需求 4.6.2)
-// TODO: 系统配置/字典 — 平台参数 CRUD、数据字典管理 (需求 4.6.2)
-// TODO: 操作日志审计 — 记录用户操作/登录日志，支持查询导出 (需求 4.6.2)
-// TODO: 数据备份 — 自动/手动备份策略，数据恢复 (需求 4.6.2)
-// TODO: 多因子认证 — 验证码/短信验证码登录 (需求 7.1)
 type UserService struct {
 	repo     *repository.UserRepo
 	roleRepo *repository.RoleRepo
@@ -67,21 +61,27 @@ func (s *UserService) List(page, size int, keyword string) ([]model.User, int64,
 }
 
 // Login 用户登录认证。
-// 流程: 查找用户 → 校验状态 → 验证密码 → 更新登录时间 → 生成 JWT Token。
-func (s *UserService) Login(username, password string) (string, error) {
+// 流程: 查找用户 → 校验状态 → 验证密码 → 更新登录时间 → 记录登录日志 → 生成 JWT Token。
+func (s *UserService) Login(username, password, ip string) (string, error) {
 	user, err := s.repo.GetByUsername(username)
 	if err != nil {
+		s.recordLoginLog("", username, ip, 0, "user not found")
 		return "", fmt.Errorf("user not found")
 	}
 	if user.Status == 0 {
+		s.recordLoginLog(user.UserID, username, ip, 0, "user is disabled")
 		return "", fmt.Errorf("user is disabled")
 	}
 	if !util.CheckPassword(password, user.PasswordHash) {
+		s.recordLoginLog(user.UserID, username, ip, 0, "invalid password")
 		return "", fmt.Errorf("invalid password")
 	}
 	// 更新最后登录时间
 	user.LastLogin = time.Now()
 	s.repo.Update(user)
+
+	// 记录登录成功日志
+	s.recordLoginLog(user.UserID, username, ip, 1, "")
 
 	// 生成 JWT Token，包含用户 ID、用户名和角色 ID
 	token, err := util.GenerateToken(
@@ -95,6 +95,21 @@ func (s *UserService) Login(username, password string) (string, error) {
 		return "", fmt.Errorf("generate token: %w", err)
 	}
 	return token, nil
+}
+
+func (s *UserService) recordLoginLog(userID, username, ip string, result int8, failReason string) {
+	logRepo := repository.NewLoginLogRepo()
+	entry := &model.LoginLog{
+		UserID:     userID,
+		Username:   username,
+		LoginIP:    ip,
+		LoginTime:  time.Now(),
+		LoginResult: result,
+		FailReason: failReason,
+	}
+	go func() {
+		_ = logRepo.Create(entry)
+	}()
 }
 
 // GetUserFromToken 根据 Token 中的用户 ID 查询用户信息。
@@ -119,6 +134,24 @@ func (s *UserService) GetRoleByID(id string) (*model.Role, error) {
 	return s.roleRepo.GetByID(id)
 }
 
+// UpdateRole 更新角色信息。
+func (s *UserService) UpdateRole(role *model.Role) error {
+	_, err := s.roleRepo.GetByID(role.RoleID)
+	if err != nil {
+		return fmt.Errorf("role not found: %w", err)
+	}
+	return s.roleRepo.Update(role)
+}
+
+// DeleteRole 删除角色。
+func (s *UserService) DeleteRole(id string) error {
+	_, err := s.roleRepo.GetByID(id)
+	if err != nil {
+		return fmt.Errorf("role not found: %w", err)
+	}
+	return s.roleRepo.Delete(id)
+}
+
 // InitDefaultRoles 初始化系统预定义角色（5 个）。
 // 仅在角色不存在时创建，已存在则跳过。系统启动时自动调用。
 func (s *UserService) InitDefaultRoles() error {
@@ -138,6 +171,47 @@ func (s *UserService) InitDefaultRoles() error {
 		}
 	}
 	return nil
+}
+
+// ForgotPassword 发起密码重置请求，生成重置 Token。
+func (s *UserService) ForgotPassword(username string) (string, error) {
+	user, err := s.repo.GetByUsername(username)
+	if err != nil {
+		return "", fmt.Errorf("user not found")
+	}
+	resetRepo := repository.NewPasswordResetRepo()
+	reset := &model.PasswordReset{
+		UserID:    user.UserID,
+		Token:     generateID() + generateID(),
+		ExpiresAt: time.Now().Add(30 * time.Minute),
+	}
+	if err := resetRepo.Create(reset); err != nil {
+		return "", err
+	}
+	return reset.Token, nil
+}
+
+// ResetPassword 使用重置 Token 修改密码。
+func (s *UserService) ResetPassword(token, newPassword string) error {
+	resetRepo := repository.NewPasswordResetRepo()
+	pr, err := resetRepo.GetByToken(token)
+	if err != nil {
+		return fmt.Errorf("invalid token")
+	}
+	if pr.Used == 1 {
+		return fmt.Errorf("token already used")
+	}
+	if time.Now().After(pr.ExpiresAt) {
+		return fmt.Errorf("token expired")
+	}
+	hash, err := util.HashPassword(newPassword)
+	if err != nil {
+		return err
+	}
+	if err := s.repo.UpdatePassword(pr.UserID, hash); err != nil {
+		return err
+	}
+	return resetRepo.MarkUsed(token)
 }
 
 // InitAdminUser 初始化默认管理员账号（admin/admin123）。

@@ -1,10 +1,6 @@
 // Package repository 提供数据访问层，封装所有数据库操作。
 // 每个 Repo 结构体对应一个数据模型，提供标准 CRUD 和业务查询方法。
 // 所有 Repo 实例共享全局 DB 连接池，由 InitDB 在启动时初始化。
-//
-// TODO: 缺少的数据库表迁移 — 需要 AutoMigrate: Firmware, Maintenance, AuditLog, LoginLog,
-//
-//	SystemConfig, Dict, Organization, AlarmRule, NotifyTemplate (详见 model/station.go)
 package repository
 
 import (

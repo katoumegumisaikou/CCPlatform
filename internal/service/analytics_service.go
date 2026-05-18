@@ -2,22 +2,18 @@ package service
 
 import (
 	"ccplatform/internal/repository"
+	"fmt"
+	"strconv"
 	"time"
 )
 
 // AnalyticsService 数据分析业务逻辑层，计算经济技术指标和生成运行报表。
 // 对应需求文档中的"经济技术指标"和"数据统计分析"模块。
-//
-// TODO: 真实效率计算 — 从实际清扫轨迹计算覆盖率/重复率，替换当前硬编码常量 (需求 4.5/8.1)
-// TODO: 多维度对比分析 — 多电站/多机器人/多时段横向对比 (需求 4.5.2)
-// TODO: 趋势预测模型 — 发电效率预测(8.2.1)、故障预测(8.2.2)、最优清扫策略(8.2.3) (需求 8.2)
-// TODO: 自定义报表引擎 — 用户可配置报表模板、数据维度和展示方式 (需求 4.5.2)
-// TODO: 报表导出 — Excel/PDF 格式导出 (需求 4.5.2)
-// TODO: 时间维度聚合 — 日/周/月/年报表自动生成 (需求 4.5.2)
 type AnalyticsService struct {
-	stationRepo *repository.StationRepo
-	robotRepo   *repository.RobotRepo
-	taskRepo    *repository.TaskRepo
+	stationRepo  *repository.StationRepo
+	robotRepo    *repository.RobotRepo
+	taskRepo     *repository.TaskRepo
+	cleanRepo    *repository.CleaningRecordRepo
 }
 
 // NewAnalyticsService 创建 AnalyticsService 实例。
@@ -26,6 +22,7 @@ func NewAnalyticsService() *AnalyticsService {
 		stationRepo: repository.NewStationRepo(),
 		robotRepo:   repository.NewRobotRepo(),
 		taskRepo:    repository.NewTaskRepo(),
+		cleanRepo:   repository.NewCleaningRecordRepo(),
 	}
 }
 
@@ -154,4 +151,70 @@ func (s *AnalyticsService) GetRunReport(stationID string, startDate, endDate tim
 		"period_start":     startDate,
 		"period_end":       endDate,
 	}, nil
+}
+
+// Compare 多维度对比分析，支持按电站、机器人、时段对比。
+func (s *AnalyticsService) Compare(dimension string, ids []string) (map[string]interface{}, error) {
+	result := make(map[string]interface{})
+	result["dimension"] = dimension
+	var items []map[string]interface{}
+	for _, id := range ids {
+		item := map[string]interface{}{"id": id}
+		cleanArea, _ := s.taskRepo.SumCleanAreaByStation(id)
+		taskCount, _ := s.taskRepo.CountByStation(id)
+		robotCount, _ := s.robotRepo.CountByStation(id)
+		onlineCount, _ := s.robotRepo.CountOnlineByStation(id)
+		item["clean_area"] = cleanArea
+		item["task_count"] = taskCount
+		item["robot_count"] = robotCount
+		item["online_count"] = onlineCount
+		items = append(items, item)
+	}
+	result["items"] = items
+	return result, nil
+}
+
+// ExportReport 导出运行报表为 CSV 二维数组。
+func (s *AnalyticsService) ExportReport(stationID string, startDate, endDate time.Time) ([][]string, error) {
+	report, err := s.GetRunReport(stationID, startDate, endDate)
+	if err != nil {
+		return nil, err
+	}
+	var rows [][]string
+	rows = append(rows, []string{"指标", "值"})
+	for k, v := range report {
+		rows = append(rows, []string{k, fmt.Sprintf("%v", v)})
+	}
+	return rows, nil
+}
+
+// GetTimeSeries 按时间粒度聚合清扫面积时序数据。
+func (s *AnalyticsService) GetTimeSeries(stationID, granularity, startTime, endTime string) ([]map[string]interface{}, error) {
+	var results []map[string]interface{}
+	records, err := s.cleanRepo.GetByStation(stationID, startTime, endTime)
+	if err != nil {
+		return results, nil
+	}
+	buckets := make(map[string]float64)
+	for _, rec := range records {
+		var key string
+		switch granularity {
+		case "hour":
+			key = rec.RecordTime.Format("2006-01-02 15:00")
+		case "week":
+			_, week := rec.RecordTime.ISOWeek()
+			key = fmt.Sprintf("%d-W%02d", rec.RecordTime.Year(), week)
+		case "month":
+			key = rec.RecordTime.Format("2006-01")
+		case "year":
+			key = rec.RecordTime.Format("2006")
+		default:
+			key = rec.RecordTime.Format("2006-01-02")
+		}
+		buckets[key] += rec.CleanArea
+	}
+	for k, v := range buckets {
+		results = append(results, map[string]interface{}{"period": k, "value": strconv.FormatFloat(v, 'f', 2, 64)})
+	}
+	return results, nil
 }

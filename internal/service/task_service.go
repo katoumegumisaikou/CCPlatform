@@ -7,10 +7,6 @@ import (
 )
 
 // TaskService 清扫任务业务逻辑层，处理任务的创建、状态流转和查询。
-//
-// TODO: 智能调度 — 基于机器人位置/电量/负载的任务分配优化算法 (需求 4.2.2)
-// TODO: 周期任务调度 — cron 定时器支持按日/周/月自动创建清扫任务 (需求 4.2.2)
-// TODO: 清扫进度实时计算 — 根据机器人实时位置和清扫面积计算完成百分比和预计完成时间 (需求 4.2.2)
 type TaskService struct {
 	repo      *repository.TaskRepo
 	robotRepo *repository.RobotRepo
@@ -91,4 +87,74 @@ func (s *TaskService) UpdateStatus(taskID uint, status int8) error {
 		}
 	}
 	return s.repo.UpdateStatus(taskID, status)
+}
+
+// SmartSchedule 智能调度：选择最优机器人执行任务。
+func (s *TaskService) SmartSchedule(stationID string) (*model.Task, error) {
+	robots, err := s.robotRepo.GetByStationID(stationID)
+	if err != nil || len(robots) == 0 {
+		return nil, fmt.Errorf("no robots available in station %s", stationID)
+	}
+	var best *model.Robot
+	for i := range robots {
+		r := &robots[i]
+		if r.OnlineStatus != 1 || r.BatteryLevel < 20 || r.WorkStatus == 1 {
+			continue
+		}
+		if best == nil || r.BatteryLevel > best.BatteryLevel {
+			best = r
+		}
+	}
+	if best == nil {
+		return nil, fmt.Errorf("no available robot in station %s", stationID)
+	}
+	task := &model.Task{
+		TaskName:   fmt.Sprintf("智能调度-%s", best.RobotName),
+		TaskType:   1,
+		RobotID:    best.RobotID,
+		StationID:  stationID,
+		TaskStatus: 0,
+	}
+	if err := s.repo.Create(task); err != nil {
+		return nil, err
+	}
+	return task, nil
+}
+
+// GetProgress 计算任务清扫进度。
+func (s *TaskService) GetProgress(taskID uint) (map[string]interface{}, error) {
+	task, err := s.repo.GetByID(taskID)
+	if err != nil {
+		return nil, fmt.Errorf("task not found: %w", err)
+	}
+	result := map[string]interface{}{
+		"task_id":     task.TaskID,
+		"task_name":   task.TaskName,
+		"task_status": task.TaskStatus,
+		"clean_area":  task.CleanArea,
+	}
+	if task.TaskStatus == 1 && task.ActualStart != nil {
+		elapsed := 0.0
+		if task.PlanEnd != nil && task.PlanStart != nil {
+			totalDuration := task.PlanEnd.Sub(*task.PlanStart).Seconds()
+			if totalDuration > 0 {
+				elapsed = float64(task.UpdateTime.Sub(*task.ActualStart).Seconds())
+				progress := elapsed / totalDuration * 100
+				if progress > 100 {
+					progress = 100
+				}
+				result["progress"] = progress
+				remaining := totalDuration - elapsed
+				if remaining < 0 {
+					remaining = 0
+				}
+				result["estimated_remaining_seconds"] = remaining
+			}
+		}
+	}
+	if _, ok := result["progress"]; !ok {
+		result["progress"] = 0
+		result["estimated_remaining_seconds"] = 0
+	}
+	return result, nil
 }

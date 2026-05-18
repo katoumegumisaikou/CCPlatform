@@ -13,10 +13,6 @@ import (
 
 // TaskHandler 清扫任务 HTTP 处理器，处理任务的创建、查询和状态变更。
 //
-// TODO: 智能调度算法 — 优化任务分配和执行顺序，综合考虑机器人位置、电量、负载 (需求 4.2.2)
-// TODO: 定时/周期计划 — 支持按日/周/月配置周期性清扫计划，需要 cron 调度器 (需求 4.2.2)
-// TODO: 任务执行进度跟踪 — 实时计算清扫进度百分比和预计完成时间 (需求 4.2.2)
-// TODO: 任务历史导出 — 支持导出为 Excel/PDF 格式 (需求 4.2.2)
 type TaskHandler struct {
 	svc *service.TaskService
 }
@@ -119,4 +115,37 @@ func (h *TaskHandler) Delete(c *gin.Context) {
 		return
 	}
 	response.OK(c, nil)
+}
+
+// SmartScheduleRequest 智能调度请求体。
+type SmartScheduleRequest struct {
+	StationID string `json:"station_id" binding:"required"`
+}
+
+// SmartSchedule 智能调度接口，选择最优机器人创建任务。
+// POST /api/v1/tasks/smart-schedule
+func (h *TaskHandler) SmartSchedule(c *gin.Context) {
+	var req SmartScheduleRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, errcode.ErrParam)
+		return
+	}
+	task, err := h.svc.SmartSchedule(req.StationID)
+	if err != nil {
+		response.ErrorMsg(c, 400, 10018, err.Error())
+		return
+	}
+	response.OK(c, task)
+}
+
+// GetProgress 任务清扫进度查询接口。
+// GET /api/v1/tasks/:id/progress
+func (h *TaskHandler) GetProgress(c *gin.Context) {
+	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+	data, err := h.svc.GetProgress(uint(id))
+	if err != nil {
+		response.Error(c, errcode.ErrNotFound)
+		return
+	}
+	response.OK(c, data)
 }

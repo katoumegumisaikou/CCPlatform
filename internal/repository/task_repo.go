@@ -7,9 +7,6 @@ import (
 )
 
 // TaskRepo 清扫任务数据访问层，封装 tasks 表的所有数据库操作。
-//
-// TODO: 周期任务查询 — 查询启用的定时/周期任务配置，供 cron 调度器使用 (需求 4.2.2)
-// TODO: 任务进度计算 — 实时清扫面积与规划面积对比，计算完成百分比 (需求 4.2.2)
 type TaskRepo struct {
 	db *gorm.DB
 }

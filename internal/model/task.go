@@ -20,6 +20,7 @@ type Task struct {
 	ActualEnd   *time.Time `gorm:"type:datetime" json:"actual_end"`                 // 实际结束时间
 	CleanArea   float64    `gorm:"type:decimal(10,2)" json:"clean_area"`            // 实际清扫面积 (㎡)
 	TaskStatus  int8       `gorm:"type:tinyint;default:0" json:"task_status"`       // 任务状态: 0待执行 1执行中 2已完成 3已暂停 4已取消 5失败
+	CronExpr    string     `gorm:"type:varchar(100)" json:"cron_expr"`              // 周期任务 cron 表达式
 	CreateTime  time.Time  `gorm:"autoCreateTime" json:"create_time"`               // 创建时间
 	UpdateTime  time.Time  `gorm:"autoUpdateTime" json:"update_time"`               // 更新时间
 }
