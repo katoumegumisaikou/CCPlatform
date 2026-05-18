@@ -1,4 +1,15 @@
 -- 拓达威光伏清扫机器人云控平台 - 数据库初始化脚本
+--
+-- TODO: 缺少的建表语句:
+--   - firmwares (固件版本管理, 需求 4.3)
+--   - maintenance (维护记录, 需求 4.3)
+--   - audit_logs (操作日志, 需求 4.6.2)
+--   - login_logs (登录日志, 需求 4.6.2)
+--   - system_configs (系统配置, 需求 4.6.2)
+--   - dicts / dict_items (数据字典, 需求 4.6.2)
+--   - organizations (组织架构, 需求 4.6.2)
+--   - alarm_rules (告警规则, 需求 4.4.2)
+--   - notify_templates (通知模板, 需求 4.4.2)
 
 CREATE DATABASE IF NOT EXISTS ccplatform CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE ccplatform;

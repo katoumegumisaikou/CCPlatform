@@ -1,4 +1,19 @@
 // Package router 注册所有 HTTP 路由，包括公开接口、JWT 认证接口和 RBAC 权限接口。
+//
+// TODO: 设备注册路由 — POST /api/v1/robots (需求 4.3)
+// TODO: 设备更新/删除路由 — PUT/DELETE /api/v1/robots/:id (需求 4.3)
+// TODO: OTA 固件升级路由 — /api/v1/firmware/* (需求 4.3)
+// TODO: 维护管理路由 — /api/v1/maintenance/* (需求 4.3)
+// TODO: 告警规则路由 — /api/v1/alarm-rules/* (需求 4.4.2)
+// TODO: 告警通知配置路由 — /api/v1/notify/* (需求 4.4.2)
+// TODO: 组织架构路由 — /api/v1/organizations/* (需求 4.6.2)
+// TODO: 操作日志路由 — /api/v1/audit-logs (需求 4.6.2)
+// TODO: 系统配置/字典路由 — /api/v1/system/* (需求 4.6.2)
+// TODO: 数据备份路由 — /api/v1/backup/* (需求 4.6.2)
+// TODO: 报表导出路由 — /api/v1/analytics/export (需求 4.5.2)
+// TODO: 对比分析路由 — /api/v1/analytics/compare (需求 4.5.2)
+// TODO: 历史轨迹路由 — /api/v1/robots/:id/tracks (需求 4.1.2)
+// TODO: 视频监控路由 — /api/v1/cameras/* (需求 4.1.2)
 package router
 
 import (

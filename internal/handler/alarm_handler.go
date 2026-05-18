@@ -10,6 +10,10 @@ import (
 )
 
 // AlarmHandler 告警 HTTP 处理器，处理告警的查询、处理和统计。
+//
+// TODO: 告警通知 — 短信/邮件/APP 推送渠道集成，通知模板管理 (需求 4.4.2)
+// TODO: 告警规则配置 — 告警阈值设置、升级规则(严重告警超时自动升级)、抑制规则 (需求 4.4.2)
+// TODO: 告警趋势分析 — 高频告警类型识别、告警趋势图表、根因分析 (需求 4.4.2)
 type AlarmHandler struct {
 	svc *service.AlarmService
 }

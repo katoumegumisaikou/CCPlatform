@@ -7,6 +7,10 @@ import (
 )
 
 // TaskService 清扫任务业务逻辑层，处理任务的创建、状态流转和查询。
+//
+// TODO: 智能调度 — 基于机器人位置/电量/负载的任务分配优化算法 (需求 4.2.2)
+// TODO: 周期任务调度 — cron 定时器支持按日/周/月自动创建清扫任务 (需求 4.2.2)
+// TODO: 清扫进度实时计算 — 根据机器人实时位置和清扫面积计算完成百分比和预计完成时间 (需求 4.2.2)
 type TaskService struct {
 	repo      *repository.TaskRepo
 	robotRepo *repository.RobotRepo

@@ -9,6 +9,11 @@ import (
 )
 
 // MonitorHandler 监控中心 HTTP 处理器，提供仪表盘概览和实时数据查询。
+//
+// TODO: 历史轨迹查询接口 — 按时间段筛选机器人历史运行轨迹 (需求 4.1.2)
+// TODO: 视频监控集成 — 摄像头管理、实时画面查看、视频流推送 (需求 4.1.2)
+// TODO: 环境数据历史查询 — 温度/湿度/光照/风速的时序数据查询 (需求 4.1.2)
+// TODO: GIS 地图配置 — 卫星/矢量地图切换的后端配置支持 (需求 4.1.2)
 type MonitorHandler struct {
 	svc *service.MonitorService
 }

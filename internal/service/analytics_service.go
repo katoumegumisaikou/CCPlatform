@@ -7,6 +7,13 @@ import (
 
 // AnalyticsService 数据分析业务逻辑层，计算经济技术指标和生成运行报表。
 // 对应需求文档中的"经济技术指标"和"数据统计分析"模块。
+//
+// TODO: 真实效率计算 — 从实际清扫轨迹计算覆盖率/重复率，替换当前硬编码常量 (需求 4.5/8.1)
+// TODO: 多维度对比分析 — 多电站/多机器人/多时段横向对比 (需求 4.5.2)
+// TODO: 趋势预测模型 — 发电效率预测(8.2.1)、故障预测(8.2.2)、最优清扫策略(8.2.3) (需求 8.2)
+// TODO: 自定义报表引擎 — 用户可配置报表模板、数据维度和展示方式 (需求 4.5.2)
+// TODO: 报表导出 — Excel/PDF 格式导出 (需求 4.5.2)
+// TODO: 时间维度聚合 — 日/周/月/年报表自动生成 (需求 4.5.2)
 type AnalyticsService struct {
 	stationRepo *repository.StationRepo
 	robotRepo   *repository.RobotRepo

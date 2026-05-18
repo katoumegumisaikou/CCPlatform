@@ -12,6 +12,11 @@ import (
 )
 
 // TaskHandler 清扫任务 HTTP 处理器，处理任务的创建、查询和状态变更。
+//
+// TODO: 智能调度算法 — 优化任务分配和执行顺序，综合考虑机器人位置、电量、负载 (需求 4.2.2)
+// TODO: 定时/周期计划 — 支持按日/周/月配置周期性清扫计划，需要 cron 调度器 (需求 4.2.2)
+// TODO: 任务执行进度跟踪 — 实时计算清扫进度百分比和预计完成时间 (需求 4.2.2)
+// TODO: 任务历史导出 — 支持导出为 Excel/PDF 格式 (需求 4.2.2)
 type TaskHandler struct {
 	svc *service.TaskService
 }

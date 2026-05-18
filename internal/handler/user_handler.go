@@ -11,6 +11,14 @@ import (
 )
 
 // UserHandler 用户与角色 HTTP 处理器，处理认证、用户管理和角色管理。
+//
+// TODO: 密码重置 — 忘记密码/重置密码流程，短信验证码验证 (需求 7.1)
+// TODO: 角色更新/删除 API — PUT/DELETE /api/v1/roles/:id (需求 4.6.2)
+// TODO: 组织架构管理 — 多级组织结构 CRUD，电站归属关系 (需求 4.6.2)
+// TODO: 系统配置/字典管理 — 平台参数配置、数据字典 CRUD (需求 4.6.2)
+// TODO: 操作日志审计 — 操作日志/登录日志的记录、查询和导出 (需求 4.6.2)
+// TODO: 数据备份 — 备份策略配置、手动/自动备份、备份恢复 (需求 4.6.2)
+// TODO: 验证码功能 — 图形验证码、短信验证码 (需求 7.1)
 type UserHandler struct {
 	svc *service.UserService
 }

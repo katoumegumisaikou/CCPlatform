@@ -7,6 +7,11 @@ import (
 )
 
 // RobotService 机器人业务逻辑层，处理机器人的增删改查和远程控制。
+//
+// TODO: OTA 固件升级 — 版本检查、升级包管理、批量升级、回滚机制 (需求 4.3)
+// TODO: 维护管理 — 维护记录 CRUD、维护提醒通知、维护计划 (需求 4.3)
+// TODO: 设备配置模板 — 配置读写、模板管理、批量配置下发 (需求 4.3)
+// TODO: 设备高级统计 — 故障率/利用率/MTBF 等指标计算 (需求 4.3)
 type RobotService struct {
 	repo     *repository.RobotRepo
 	taskRepo *repository.TaskRepo

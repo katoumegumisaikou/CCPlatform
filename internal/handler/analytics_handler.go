@@ -10,6 +10,13 @@ import (
 )
 
 // AnalyticsHandler 数据分析 HTTP 处理器，提供经济技术指标和运行报表查询。
+//
+// TODO: 真实效率计算 — 覆盖率/重复率应从实际清扫轨迹数据计算，替换硬编码常量 (需求 4.5.2)
+// TODO: 对比分析 — 多电站/多机器人数据对比 API (需求 4.5.2)
+// TODO: 趋势预测 — 发电效率预测模型、故障预测模型、最优清扫策略模型 (需求 8.2)
+// TODO: 自定义报表 — 用户自定义报表模板和数据维度配置 (需求 4.5.2)
+// TODO: 报表导出 — 支持 Excel/PDF 格式导出 (需求 4.5.2)
+// TODO: 时间维度聚合 — 按日/周/月/年聚合的查询接口 (需求 4.5.2)
 type AnalyticsHandler struct {
 	svc *service.AnalyticsService
 }

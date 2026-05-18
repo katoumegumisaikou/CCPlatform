@@ -12,6 +12,13 @@ import (
 
 // RobotHandler 机器人 HTTP 处理器，处理机器人相关的 RESTful API 请求。
 // 包含机器人 CRUD、状态查询和远程控制指令下发。
+//
+// TODO: 设备注册 API — POST /api/v1/robots 创建机器人，绑定电站和通信参数 (需求 4.3)
+// TODO: 设备更新/删除 API — PUT/DELETE /api/v1/robots/:id (需求 4.3)
+// TODO: OTA 固件升级 — 固件版本管理、升级包上传、批量升级、升级状态追踪 (需求 4.3)
+// TODO: 维护管理 — 维护记录 CRUD、维护提醒、维护计划 (需求 4.3)
+// TODO: 设备配置管理 — 配置模板 CRUD，读写机器人工作参数 (需求 4.3)
+// TODO: 设备高级统计 — 故障率、利用率等指标计算 (需求 4.3)
 type RobotHandler struct {
 	svc       *service.RobotService
 	publisher *mqtt.Publisher // MQTT 下行消息发布器，用于发送控制指令

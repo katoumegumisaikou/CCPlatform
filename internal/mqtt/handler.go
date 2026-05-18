@@ -68,6 +68,10 @@ type AlarmPayload struct {
 // MessageHandler 是 MQTT 消息处理器，实现了 mochi-mqtt 的 Hook 接口。
 // 通过 OnPublish 拦截所有发布消息，根据 Topic 路径分发到对应的处理函数。
 // 处理流程: 解析JSON → 更新数据库 → 通过 WebSocket 推送给前端。
+//
+// TODO: OTA 固件升级消息处理 — tdw/robot/{id}/ota 上行升级状态、下行升级指令 (需求 4.3)
+// TODO: 清扫数据消息处理 — tdw/robot/{id}/clean 上行实时清扫面积、进度、质量数据 (需求 5.3)
+// TODO: MQTT 客户端认证增强 — 替换 AllowHook 为设备证书/Token 认证 (需求 5.2.1)
 type MessageHandler struct {
 	mqtt.HookBase                              // 嵌入 HookBase 提供默认实现
 	robotRepo      *repository.RobotRepo       // 机器人数据操作

@@ -10,6 +10,13 @@ import (
 )
 
 // UserService 用户与角色业务逻辑层，处理用户认证、RBAC 权限和系统初始化。
+//
+// TODO: 密码重置流程 — 忘记密码/邮件重置/短信验证码重置 (需求 7.1)
+// TODO: 组织架构管理 — 多级组织结构(公司/区域/电站)，与电站关联 (需求 4.6.2)
+// TODO: 系统配置/字典 — 平台参数 CRUD、数据字典管理 (需求 4.6.2)
+// TODO: 操作日志审计 — 记录用户操作/登录日志，支持查询导出 (需求 4.6.2)
+// TODO: 数据备份 — 自动/手动备份策略，数据恢复 (需求 4.6.2)
+// TODO: 多因子认证 — 验证码/短信验证码登录 (需求 7.1)
 type UserService struct {
 	repo     *repository.UserRepo
 	roleRepo *repository.RoleRepo

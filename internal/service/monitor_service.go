@@ -5,6 +5,9 @@ import (
 )
 
 // MonitorService 监控中心业务逻辑层，聚合多维度数据供仪表盘和实时监控使用。
+//
+// TODO: 历史轨迹查询 — 按时间段查询机器人坐标历史，支持轨迹回放 (需求 4.1.2)
+// TODO: 环境数据时序查询 — 温度/湿度/光照/风速历史趋势数据 (需求 4.1.2)
 type MonitorService struct {
 	stationRepo *repository.StationRepo
 	robotRepo   *repository.RobotRepo
