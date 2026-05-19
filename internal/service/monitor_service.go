@@ -86,18 +86,22 @@ type StationRealtime struct {
 
 // RobotRealtime 机器人实时数据，用于 GIS 地图和监控面板展示。
 type RobotRealtime struct {
-	RobotID      string  `json:"robot_id"`      // 机器人 ID
-	RobotName    string  `json:"robot_name"`    // 机器人名称
-	RobotType    int8    `json:"robot_type"`    // 机器人类型
-	OnlineStatus int8    `json:"online_status"` // 在线状态
-	WorkStatus   int8    `json:"work_status"`   // 工作状态
-	BatteryLevel int8    `json:"battery_level"` // 电量百分比
-	PosX         float64 `json:"pos_x"`         // X 坐标
-	PosY         float64 `json:"pos_y"`         // Y 坐标
-	PosZ         float64 `json:"pos_z"`         // Z 坐标
-	Heading      float64 `json:"heading"`       // 朝向角度
-	Speed        float64 `json:"speed"`         // 速度(m/s)
-	CleanArea    float64 `json:"clean_area"`    // 累计清扫面积(㎡)
+	RobotID        string  `json:"robot_id"`        // 机器人 ID
+	RobotName      string  `json:"robot_name"`      // 机器人名称
+	RobotType      int8    `json:"robot_type"`      // 机器人类型
+	OnlineStatus   int8    `json:"online_status"`   // 在线状态
+	WorkStatus     int8    `json:"work_status"`     // 工作状态
+	BatteryLevel   int8    `json:"battery_level"`   // 电量百分比
+	PosX           float64 `json:"pos_x"`           // X 坐标
+	PosY           float64 `json:"pos_y"`           // Y 坐标
+	PosZ           float64 `json:"pos_z"`           // Z 坐标
+	Heading        float64 `json:"heading"`         // 朝向角度
+	Speed          float64 `json:"speed"`           // 速度(m/s)
+	CleanArea      float64 `json:"clean_area"`      // 累计清扫面积(㎡)
+	Temperature    float64 `json:"temperature"`     // 环境温度(℃)
+	Humidity       float64 `json:"humidity"`        // 环境湿度(%)
+	LightIntensity float64 `json:"light_intensity"` // 光照强度(lux)
+	WindSpeed      float64 `json:"wind_speed"`      // 风速(m/s)
 }
 
 // GetRealtimeData 获取指定电站的实时监控数据，包含电站下所有机器人的位置和状态。
@@ -115,18 +119,22 @@ func (s *MonitorService) GetRealtimeData(stationID string) (*StationRealtime, er
 	var robotRealtimes []RobotRealtime
 	for _, r := range robots {
 		robotRealtimes = append(robotRealtimes, RobotRealtime{
-			RobotID:      r.RobotID,
-			RobotName:    r.RobotName,
-			RobotType:    r.RobotType,
-			OnlineStatus: r.OnlineStatus,
-			WorkStatus:   r.WorkStatus,
-			BatteryLevel: r.BatteryLevel,
-			PosX:         r.PosX,
-			PosY:         r.PosY,
-			PosZ:         r.PosZ,
-			Heading:      r.Heading,
-			Speed:        r.Speed,
-			CleanArea:    r.CleanArea,
+			RobotID:        r.RobotID,
+			RobotName:      r.RobotName,
+			RobotType:      r.RobotType,
+			OnlineStatus:   r.OnlineStatus,
+			WorkStatus:     r.WorkStatus,
+			BatteryLevel:   r.BatteryLevel,
+			PosX:           r.PosX,
+			PosY:           r.PosY,
+			PosZ:           r.PosZ,
+			Heading:        r.Heading,
+			Speed:          r.Speed,
+			CleanArea:      r.CleanArea,
+			Temperature:    r.Temperature,
+			Humidity:       r.Humidity,
+			LightIntensity: r.LightIntensity,
+			WindSpeed:      r.WindSpeed,
 		})
 	}
 
