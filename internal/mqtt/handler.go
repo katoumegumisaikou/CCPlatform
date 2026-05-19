@@ -1,9 +1,6 @@
 package mqtt
 
 import (
-	"ccplatform/internal/model"
-	"ccplatform/internal/repository"
-	"ccplatform/internal/ws"
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
@@ -16,6 +13,10 @@ import (
 	"github.com/mochi-mqtt/server/v2/hooks/storage"
 	"github.com/mochi-mqtt/server/v2/packets"
 	"github.com/mochi-mqtt/server/v2/system"
+
+	"ccplatform/internal/model"
+	"ccplatform/internal/repository"
+	"ccplatform/internal/ws"
 )
 
 // ===== 上行消息结构体（机器人→平台） =====
@@ -33,12 +34,12 @@ type HeartbeatPayload struct {
 // PositionPayload 位置消息，机器人每1秒上报一次。
 // 包含三维坐标和朝向，用于 GIS 地图实时展示。
 type PositionPayload struct {
-	RobotID   string  `json:"robot_id"` // 机器人 ID
+	RobotID   string  `json:"robot_id"`  // 机器人 ID
 	Timestamp int64   `json:"timestamp"` // 时间戳
-	PosX      float64 `json:"pos_x"`    // X 坐标 (m)
-	PosY      float64 `json:"pos_y"`    // Y 坐标 (m)
-	PosZ      float64 `json:"pos_z"`    // Z 坐标 (m)
-	Heading   float64 `json:"heading"`  // 朝向角度 (度)
+	PosX      float64 `json:"pos_x"`     // X 坐标 (m)
+	PosY      float64 `json:"pos_y"`     // Y 坐标 (m)
+	PosZ      float64 `json:"pos_z"`     // Z 坐标 (m)
+	Heading   float64 `json:"heading"`   // 朝向角度 (度)
 }
 
 // StatusPayload 运行状态消息，机器人每10秒上报一次。
@@ -58,10 +59,10 @@ type StatusPayload struct {
 
 // AlarmPayload 告警消息，机器人故障时实时上报。
 type AlarmPayload struct {
-	RobotID      string `json:"robot_id"`     // 机器人 ID
-	Timestamp    int64  `json:"timestamp"`    // 时间戳
-	AlarmLevel   int8   `json:"alarm_level"`  // 告警级别: 1提示 2一般 3严重 4紧急
-	AlarmType    string `json:"alarm_type"`   // 告警类型编码
+	RobotID      string `json:"robot_id"`      // 机器人 ID
+	Timestamp    int64  `json:"timestamp"`     // 时间戳
+	AlarmLevel   int8   `json:"alarm_level"`   // 告警级别: 1提示 2一般 3严重 4紧急
+	AlarmType    string `json:"alarm_type"`    // 告警类型编码
 	AlarmContent string `json:"alarm_content"` // 告警描述
 }
 
@@ -90,13 +91,13 @@ type OTAPayload struct {
 //
 // TODO: MQTT 客户端认证增强 — 替换 AllowHook 为基于 DeviceCredential 的证书/Token 认证 (需求 5.2.1)
 type MessageHandler struct {
-	mqtt.HookBase                              // 嵌入 HookBase 提供默认实现
-	robotRepo      *repository.RobotRepo       // 机器人数据操作
-	alarmRepo      *repository.AlarmRepo       // 告警数据操作
-	posHistoryRepo *repository.RobotPositionRepo // 位置历史
+	mqtt.HookBase                                  // 嵌入 HookBase 提供默认实现
+	robotRepo      *repository.RobotRepo           // 机器人数据操作
+	alarmRepo      *repository.AlarmRepo           // 告警数据操作
+	posHistoryRepo *repository.RobotPositionRepo   // 位置历史
 	envRepo        *repository.EnvironmentDataRepo // 环境数据
-	cleanRepo      *repository.CleaningRecordRepo // 清扫记录
-	wsHub          *ws.Hub                     // WebSocket 广播器
+	cleanRepo      *repository.CleaningRecordRepo  // 清扫记录
+	wsHub          *ws.Hub                         // WebSocket 广播器
 }
 
 // NewMessageHandler 创建消息处理器实例。
@@ -186,10 +187,10 @@ func (h *MessageHandler) OnPublish(cl *mqtt.Client, pk packets.Packet) (packets.
 }
 
 // Stub implementations for required interface methods
-func (h *MessageHandler) OnStarted()                                    {}
-func (h *MessageHandler) OnStopped()                                    {}
-func (h *MessageHandler) OnSysInfoTick(*system.Info)                    {}
-func (h *MessageHandler) OnSessionEstablish(cl *mqtt.Client, pk packets.Packet)  {}
+func (h *MessageHandler) OnStarted()                                              {}
+func (h *MessageHandler) OnStopped()                                              {}
+func (h *MessageHandler) OnSysInfoTick(*system.Info)                              {}
+func (h *MessageHandler) OnSessionEstablish(cl *mqtt.Client, pk packets.Packet)   {}
 func (h *MessageHandler) OnSessionEstablished(cl *mqtt.Client, pk packets.Packet) {}
 func (h *MessageHandler) OnAuthPacket(cl *mqtt.Client, pk packets.Packet) (packets.Packet, error) {
 	return pk, nil
@@ -200,7 +201,7 @@ func (h *MessageHandler) OnPacketRead(cl *mqtt.Client, pk packets.Packet) (packe
 func (h *MessageHandler) OnPacketEncode(cl *mqtt.Client, pk packets.Packet) packets.Packet {
 	return pk
 }
-func (h *MessageHandler) OnPacketSent(cl *mqtt.Client, pk packets.Packet, b []byte) {}
+func (h *MessageHandler) OnPacketSent(cl *mqtt.Client, pk packets.Packet, b []byte)       {}
 func (h *MessageHandler) OnPacketProcessed(cl *mqtt.Client, pk packets.Packet, err error) {}
 func (h *MessageHandler) OnSubscribe(cl *mqtt.Client, pk packets.Packet) packets.Packet {
 	return pk
@@ -212,15 +213,15 @@ func (h *MessageHandler) OnSelectSubscribers(subs *mqtt.Subscribers, pk packets.
 func (h *MessageHandler) OnUnsubscribe(cl *mqtt.Client, pk packets.Packet) packets.Packet {
 	return pk
 }
-func (h *MessageHandler) OnUnsubscribed(cl *mqtt.Client, pk packets.Packet)  {}
-func (h *MessageHandler) OnPublished(cl *mqtt.Client, pk packets.Packet)     {}
-func (h *MessageHandler) OnPublishDropped(cl *mqtt.Client, pk packets.Packet) {}
-func (h *MessageHandler) OnRetainMessage(cl *mqtt.Client, pk packets.Packet, r int64) {}
-func (h *MessageHandler) OnRetainPublished(cl *mqtt.Client, pk packets.Packet) {}
+func (h *MessageHandler) OnUnsubscribed(cl *mqtt.Client, pk packets.Packet)                        {}
+func (h *MessageHandler) OnPublished(cl *mqtt.Client, pk packets.Packet)                           {}
+func (h *MessageHandler) OnPublishDropped(cl *mqtt.Client, pk packets.Packet)                      {}
+func (h *MessageHandler) OnRetainMessage(cl *mqtt.Client, pk packets.Packet, r int64)              {}
+func (h *MessageHandler) OnRetainPublished(cl *mqtt.Client, pk packets.Packet)                     {}
 func (h *MessageHandler) OnQosPublish(cl *mqtt.Client, pk packets.Packet, sent int64, resends int) {}
-func (h *MessageHandler) OnQosComplete(cl *mqtt.Client, pk packets.Packet) {}
-func (h *MessageHandler) OnQosDropped(cl *mqtt.Client, pk packets.Packet) {}
-func (h *MessageHandler) OnPacketIDExhausted(cl *mqtt.Client, pk packets.Packet) {}
+func (h *MessageHandler) OnQosComplete(cl *mqtt.Client, pk packets.Packet)                         {}
+func (h *MessageHandler) OnQosDropped(cl *mqtt.Client, pk packets.Packet)                          {}
+func (h *MessageHandler) OnPacketIDExhausted(cl *mqtt.Client, pk packets.Packet)                   {}
 func (h *MessageHandler) OnWill(cl *mqtt.Client, will mqtt.Will) (mqtt.Will, error) {
 	return will, nil
 }
@@ -472,8 +473,8 @@ func (h *MessageHandler) handleOTA(robotID string, payload []byte) {
 
 // escalationEntry 升级规则条目：在 within_min 分钟内发生 count 次同类型告警，则将级别升级到 to_level。
 type escalationEntry struct {
-	Count     int `json:"count"`
-	WithinMin int `json:"within_min"`
+	Count     int  `json:"count"`
+	WithinMin int  `json:"within_min"`
 	ToLevel   int8 `json:"to_level"`
 }
 

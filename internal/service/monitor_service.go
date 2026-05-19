@@ -1,6 +1,7 @@
 package service
 
 import (
+	"ccplatform/internal/model"
 	"ccplatform/internal/repository"
 )
 
@@ -136,4 +137,9 @@ func (s *MonitorService) GetRealtimeData(stationID string) (*StationRealtime, er
 		Latitude:    station.Latitude,
 		Robots:      robotRealtimes,
 	}, nil
+}
+
+// GetPositionHistory 查询机器人历史轨迹，支持机器人 ID 和时间段筛选。
+func (s *MonitorService) GetPositionHistory(robotID, startTime, endTime string, limit int) ([]model.RobotPosition, error) {
+	return s.robotRepo.GetPositionHistory(robotID, startTime, endTime, limit)
 }

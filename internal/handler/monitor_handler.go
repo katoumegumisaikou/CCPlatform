@@ -53,8 +53,7 @@ func (h *MonitorHandler) GetPositionHistory(c *gin.Context) {
 	endTime := c.Query("end_time")
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "1000"))
 
-	robotRepo := repository.NewRobotRepo()
-	positions, err := robotRepo.GetPositionHistory(robotID, startTime, endTime, limit)
+	positions, err := h.svc.GetPositionHistory(robotID, startTime, endTime, limit)
 	if err != nil {
 		response.Error(c, errcode.ErrInternal)
 		return
