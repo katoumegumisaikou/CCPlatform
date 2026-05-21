@@ -83,7 +83,7 @@ func main() {
 	go taskScheduler.Start()
 
 	// 9. 注册所有 HTTP 路由（REST API）
-	r := router.Setup(hub, publisher)
+	r := router.Setup(hub, publisher, taskScheduler)
 
 	// 10. 启动 HTTP Server
 	addr := fmt.Sprintf(":%d", config.Cfg.Server.Port)

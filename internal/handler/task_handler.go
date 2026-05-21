@@ -3,6 +3,7 @@ package handler
 import (
 	"ccplatform/internal/model"
 	"ccplatform/internal/mqtt"
+	"ccplatform/internal/scheduler"
 	"ccplatform/internal/service"
 	"ccplatform/pkg/errcode"
 	"ccplatform/pkg/response"
@@ -18,9 +19,9 @@ type TaskHandler struct {
 	svc *service.TaskService
 }
 
-// NewTaskHandler 创建 TaskHandler 实例，publisher 透传给 TaskService 用于任务下发。
-func NewTaskHandler(publisher *mqtt.Publisher) *TaskHandler {
-	return &TaskHandler{svc: service.NewTaskService(publisher)}
+// NewTaskHandler 创建 TaskHandler 实例，publisher 和 scheduler 透传给 TaskService。
+func NewTaskHandler(publisher *mqtt.Publisher, sch *scheduler.TaskScheduler) *TaskHandler {
+	return &TaskHandler{svc: service.NewTaskService(publisher, sch)}
 }
 
 // List 任务列表接口，支持分页和多维度筛选。
@@ -55,11 +56,12 @@ func (h *TaskHandler) GetByID(c *gin.Context) {
 // CreateTaskRequest 创建任务请求体。
 type CreateTaskRequest struct {
 	TaskName  string     `json:"task_name" binding:"required"` // 任务名称（必填）
-	TaskType  int8       `json:"task_type" binding:"required"` // 任务类型(1定时 2手动 3自动)
+	TaskType  int8       `json:"task_type" binding:"required"` // 任务类型(1即时 2定时 3周期)
 	RobotID   string     `json:"robot_id" binding:"required"`  // 执行机器人 ID（必填）
 	AreaIDs   string     `json:"area_ids"`                     // 清扫区域 ID 列表
 	PlanStart *time.Time `json:"plan_start"`                   // 计划开始时间
 	PlanEnd   *time.Time `json:"plan_end"`                     // 计划结束时间
+	CronExpr  string     `json:"cron_expr"`                    // 周期任务 cron 表达式（task_type=3 时必填，如 "0 0 8 * * *"）
 }
 
 // Create 创建任务接口，自动关联机器人所属电站。
@@ -77,6 +79,7 @@ func (h *TaskHandler) Create(c *gin.Context) {
 		AreaIDs:    req.AreaIDs,
 		PlanStart:  req.PlanStart,
 		PlanEnd:    req.PlanEnd,
+		CronExpr:   req.CronExpr,
 		TaskStatus: 0,
 	}
 	if err := h.svc.Create(task); err != nil {

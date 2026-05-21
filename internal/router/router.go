@@ -7,6 +7,7 @@ import (
 	"ccplatform/internal/handler"
 	"ccplatform/internal/middleware"
 	"ccplatform/internal/mqtt"
+	"ccplatform/internal/scheduler"
 	"ccplatform/internal/ws"
 
 	"github.com/gin-gonic/gin"
@@ -36,7 +37,7 @@ type Handlers struct {
 	Backup         *handler.BackupHandler
 }
 
-func Setup(hub *ws.Hub, publisher *mqtt.Publisher) *gin.Engine {
+func Setup(hub *ws.Hub, publisher *mqtt.Publisher, taskScheduler *scheduler.TaskScheduler) *gin.Engine {
 	r := gin.Default()
 
 	// Global middleware
@@ -55,7 +56,7 @@ func Setup(hub *ws.Hub, publisher *mqtt.Publisher) *gin.Engine {
 		User:           handler.NewUserHandler(),
 		Station:        handler.NewStationHandler(),
 		Robot:          handler.NewRobotHandler(publisher),
-		Task:           handler.NewTaskHandler(publisher),
+		Task:           handler.NewTaskHandler(publisher, taskScheduler),
 		Alarm:          handler.NewAlarmHandler(),
 		Monitor:        handler.NewMonitorHandler(),
 		Analytics:      handler.NewAnalyticsHandler(),
