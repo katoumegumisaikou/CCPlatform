@@ -5,6 +5,7 @@ import (
 	"ccplatform/internal/mqtt"
 	"ccplatform/internal/repository"
 	"fmt"
+	"log"
 	"time"
 )
 
@@ -100,9 +101,9 @@ func (s *TaskService) UpdateStatus(taskID uint, status int8) error {
 	}
 	// 状态流转校验
 	switch status {
-	case 1: // 开始执行：仅待执行状态可启动
-		if task.TaskStatus != 0 {
-			return fmt.Errorf("task can only start from pending state")
+	case 1: // 开始/恢复执行：待执行或已暂停状态可启动
+		if task.TaskStatus != 0 && task.TaskStatus != 3 {
+			return fmt.Errorf("task can only start from pending or paused state")
 		}
 	case 2: // 完成：仅执行中状态可完成
 		if task.TaskStatus != 1 {
@@ -121,7 +122,41 @@ func (s *TaskService) UpdateStatus(taskID uint, status int8) error {
 			return fmt.Errorf("task can only fail from running state")
 		}
 	}
-	return s.repo.UpdateStatus(taskID, status)
+	if err := s.repo.UpdateStatus(taskID, status); err != nil {
+		return err
+	}
+
+	// 状态变更后通过 MQTT 向机器人同步控制指令
+	s.notifyRobotStatusChange(task, status)
+	return nil
+}
+
+// notifyRobotStatusChange 在任务状态变更后通过 MQTT 向机器人同步控制指令。
+// 仅处理需要通知机器人的状态（启动/暂停/取消/失败），完成状态由机器人自行上报。
+func (s *TaskService) notifyRobotStatusChange(task *model.Task, newStatus int8) {
+	var cmd string
+	params := map[string]interface{}{"task_id": task.TaskID}
+
+	switch newStatus {
+	case 1: // 开始/恢复执行
+		cmd = "start"
+	case 3: // 暂停
+		cmd = "stop"
+		params["reason"] = "paused"
+	case 4: // 取消
+		cmd = "stop"
+		params["reason"] = "cancelled"
+	case 5: // 失败
+		cmd = "stop"
+		params["reason"] = "failed"
+	default:
+		return
+	}
+
+	if err := s.publisher.SendCommand(task.RobotID, cmd, params); err != nil {
+		log.Printf("[TaskService] MQTT notify status change error (task=%d, cmd=%s): %v",
+			task.TaskID, cmd, err)
+	}
 }
 
 // SmartSchedule 智能调度：选择最优机器人执行任务。
