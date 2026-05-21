@@ -97,6 +97,7 @@ type MessageHandler struct {
 	posHistoryRepo *repository.RobotPositionRepo   // 位置历史
 	envRepo        *repository.EnvironmentDataRepo // 环境数据
 	cleanRepo      *repository.CleaningRecordRepo  // 清扫记录
+	taskRepo       *repository.TaskRepo            // 任务数据操作（clean 面积更新、work_status 联动）
 	wsHub          *ws.Hub                         // WebSocket 广播器
 }
 
@@ -108,6 +109,7 @@ func NewMessageHandler(wsHub *ws.Hub) *MessageHandler {
 		posHistoryRepo: repository.NewRobotPositionRepo(),
 		envRepo:        repository.NewEnvironmentDataRepo(),
 		cleanRepo:      repository.NewCleaningRecordRepo(),
+		taskRepo:       repository.NewTaskRepo(),
 		wsHub:          wsHub,
 	}
 }
@@ -263,9 +265,20 @@ func (h *MessageHandler) handleHeartbeat(robotID string, payload []byte) {
 		return
 	}
 
+	// 获取旧 work_status 用于变更检测（机器人首次心跳时跳过）
+	var oldWorkStatus int8 = -1
+	if robot, err := h.robotRepo.GetByID(robotID); err == nil {
+		oldWorkStatus = robot.WorkStatus
+	}
+
 	if err := h.robotRepo.UpdateHeartbeat(robotID, msg.OnlineStatus, msg.BatteryLevel, msg.WorkStatus); err != nil {
 		log.Printf("[MQTT] Update heartbeat error: %v", err)
 		return
+	}
+
+	// work_status 变更时触发任务状态联动
+	if oldWorkStatus >= 0 {
+		h.onWorkStatusChange(robotID, oldWorkStatus, msg.WorkStatus)
 	}
 
 	h.wsHub.BroadcastToAll(ws.Message{
@@ -322,6 +335,12 @@ func (h *MessageHandler) handleStatus(robotID string, payload []byte) {
 		return
 	}
 
+	// 获取旧 work_status 用于变更检测
+	var oldWorkStatus int8 = -1
+	if robot, err := h.robotRepo.GetByID(robotID); err == nil {
+		oldWorkStatus = robot.WorkStatus
+	}
+
 	data := map[string]interface{}{
 		"work_status":     msg.WorkStatus,
 		"speed":           msg.Speed,
@@ -335,6 +354,11 @@ func (h *MessageHandler) handleStatus(robotID string, payload []byte) {
 	if err := h.robotRepo.UpdateStatus(robotID, data); err != nil {
 		log.Printf("[MQTT] Update status error: %v", err)
 		return
+	}
+
+	// work_status 变更时触发任务状态联动
+	if oldWorkStatus >= 0 {
+		h.onWorkStatusChange(robotID, oldWorkStatus, msg.WorkStatus)
 	}
 
 	// 写入环境数据历史表
@@ -429,6 +453,13 @@ func (h *MessageHandler) handleClean(robotID string, payload []byte) {
 		RecordTime: time.Unix(msg.Timestamp, 0),
 	})
 
+	// 实时更新任务的累计清扫面积
+	if msg.TaskID > 0 {
+		if err := h.taskRepo.UpdateCleanArea(msg.TaskID, msg.CleanArea); err != nil {
+			log.Printf("[MQTT] Update task clean_area error (task=%d): %v", msg.TaskID, err)
+		}
+	}
+
 	h.wsHub.BroadcastToAll(ws.Message{
 		Type: "clean",
 		Data: map[string]interface{}{
@@ -467,6 +498,87 @@ func (h *MessageHandler) handleOTA(robotID string, payload []byte) {
 	}
 
 	log.Printf("[MQTT] OTA status for robot %s: status=%d", robotID, msg.Status)
+}
+
+// ===== 告警规则评估（内置于 handler，避免 mqtt ↔ service 循环引用）=====
+
+// ===== 机器人 work_status 变更 → 任务状态联动 =====
+
+// onWorkStatusChange 根据机器人 work_status 的变化触发对应任务状态流转。
+// handleHeartbeat 和 handleStatus 共用此函数，状态未变化时直接返回。
+func (h *MessageHandler) onWorkStatusChange(robotID string, oldStatus, newStatus int8) {
+	if oldStatus == newStatus {
+		return
+	}
+	log.Printf("[MQTT] Robot %s work_status changed: %d → %d", robotID, oldStatus, newStatus)
+	switch {
+	case oldStatus == 1 && newStatus == 0: // 清扫→空闲: 完成任务
+		h.completeActiveTask(robotID)
+	case oldStatus == 1 && newStatus == 2: // 清扫→充电: 暂停任务
+		h.pauseActiveTask(robotID)
+	case oldStatus == 1 && newStatus == 3: // 清扫→故障: 失败任务
+		h.failActiveTask(robotID)
+	case oldStatus == 2 && newStatus == 1: // 充电→清扫: 恢复暂停的任务
+		h.resumePausedTask(robotID)
+	}
+}
+
+func (h *MessageHandler) completeActiveTask(robotID string) {
+	task, err := h.taskRepo.GetActiveByRobot(robotID)
+	if err != nil {
+		log.Printf("[MQTT] completeActiveTask: no active task for robot %s: %v", robotID, err)
+		return
+	}
+	now := time.Now()
+	task.ActualEnd = &now
+	task.TaskStatus = 2
+	if err := h.taskRepo.Update(task); err != nil {
+		log.Printf("[MQTT] completeActiveTask: update task %d error: %v", task.TaskID, err)
+		return
+	}
+	log.Printf("[MQTT] Task %d completed by robot %s work_status change", task.TaskID, robotID)
+}
+
+func (h *MessageHandler) pauseActiveTask(robotID string) {
+	task, err := h.taskRepo.GetActiveByRobot(robotID)
+	if err != nil {
+		log.Printf("[MQTT] pauseActiveTask: no active task for robot %s: %v", robotID, err)
+		return
+	}
+	if err := h.taskRepo.UpdateStatus(task.TaskID, 3); err != nil {
+		log.Printf("[MQTT] pauseActiveTask: update task %d error: %v", task.TaskID, err)
+		return
+	}
+	log.Printf("[MQTT] Task %d paused by robot %s work_status change (low battery)", task.TaskID, robotID)
+}
+
+func (h *MessageHandler) failActiveTask(robotID string) {
+	task, err := h.taskRepo.GetActiveByRobot(robotID)
+	if err != nil {
+		log.Printf("[MQTT] failActiveTask: no active task for robot %s: %v", robotID, err)
+		return
+	}
+	if err := h.taskRepo.UpdateStatus(task.TaskID, 5); err != nil {
+		log.Printf("[MQTT] failActiveTask: update task %d error: %v", task.TaskID, err)
+		return
+	}
+	log.Printf("[MQTT] Task %d failed by robot %s work_status change (fault)", task.TaskID, robotID)
+}
+
+func (h *MessageHandler) resumePausedTask(robotID string) {
+	task, err := h.taskRepo.GetActiveByRobot(robotID)
+	if err != nil {
+		log.Printf("[MQTT] resumePausedTask: no paused task for robot %s: %v", robotID, err)
+		return
+	}
+	if task.TaskStatus != 3 {
+		return // 只恢复暂停的任务
+	}
+	if err := h.taskRepo.UpdateStatus(task.TaskID, 1); err != nil {
+		log.Printf("[MQTT] resumePausedTask: update task %d error: %v", task.TaskID, err)
+		return
+	}
+	log.Printf("[MQTT] Task %d resumed by robot %s work_status change (charging→cleaning)", task.TaskID, robotID)
 }
 
 // ===== 告警规则评估（内置于 handler，避免 mqtt ↔ service 循环引用）=====

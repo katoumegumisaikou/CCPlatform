@@ -2,21 +2,25 @@ package service
 
 import (
 	"ccplatform/internal/model"
+	"ccplatform/internal/mqtt"
 	"ccplatform/internal/repository"
 	"fmt"
+	"time"
 )
 
 // RobotService 机器人业务逻辑层，处理机器人的增删改查和远程控制。
 type RobotService struct {
-	repo     *repository.RobotRepo
-	taskRepo *repository.TaskRepo
+	repo      *repository.RobotRepo
+	taskRepo  *repository.TaskRepo
+	publisher *mqtt.Publisher
 }
 
-// NewRobotService 创建 RobotService 实例。
-func NewRobotService() *RobotService {
+// NewRobotService 创建 RobotService 实例，注入 MQTT Publisher 用于指令下发。
+func NewRobotService(publisher *mqtt.Publisher) *RobotService {
 	return &RobotService{
-		repo:     repository.NewRobotRepo(),
-		taskRepo: repository.NewTaskRepo(),
+		repo:      repository.NewRobotRepo(),
+		taskRepo:  repository.NewTaskRepo(),
+		publisher: publisher,
 	}
 }
 
@@ -53,7 +57,7 @@ func (s *RobotService) List(page, size int, stationID string, robotType, onlineS
 }
 
 // SendCommand 向机器人下发控制指令。
-// 先校验机器人是否存在且在线，校验通过后由 Handler 层通过 MQTT Publisher 发送。
+// 校验机器人存在且在线后，通过 MQTT Publisher 下发指令，并根据指令类型联动任务状态。
 func (s *RobotService) SendCommand(robotID, cmd string, params map[string]interface{}) error {
 	robot, err := s.repo.GetByID(robotID)
 	if err != nil {
@@ -62,7 +66,44 @@ func (s *RobotService) SendCommand(robotID, cmd string, params map[string]interf
 	if robot.OnlineStatus == 0 {
 		return fmt.Errorf("robot is offline")
 	}
-	// MQTT client will handle actual publishing
+
+	if err := s.publisher.SendCommand(robotID, cmd, params); err != nil {
+		return fmt.Errorf("publish command: %w", err)
+	}
+
+	// 根据指令类型联动任务状态
+	switch cmd {
+	case "start":
+		task, err := s.taskRepo.GetActiveByRobot(robotID)
+		if err != nil {
+			break // 无活跃任务则跳过，仅下发指令
+		}
+		now := time.Now()
+		task.ActualStart = &now
+		task.TaskStatus = 1
+		_ = s.taskRepo.Update(task)
+
+	case "stop":
+		task, err := s.taskRepo.GetActiveByRobot(robotID)
+		if err != nil || task.TaskStatus != 1 {
+			break
+		}
+		task.TaskStatus = 3
+		_ = s.taskRepo.Update(task)
+
+	case "return":
+		task, err := s.taskRepo.GetActiveByRobot(robotID)
+		if err != nil || task.TaskStatus != 1 {
+			break
+		}
+		now := time.Now()
+		task.ActualEnd = &now
+		task.TaskStatus = 2
+		_ = s.taskRepo.Update(task)
+
+	// reset 不联动任务，仅透传指令
+	}
+
 	return nil
 }
 

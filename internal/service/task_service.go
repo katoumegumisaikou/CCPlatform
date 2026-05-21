@@ -2,32 +2,62 @@ package service
 
 import (
 	"ccplatform/internal/model"
+	"ccplatform/internal/mqtt"
 	"ccplatform/internal/repository"
 	"fmt"
+	"time"
 )
 
 // TaskService 清扫任务业务逻辑层，处理任务的创建、状态流转和查询。
 type TaskService struct {
 	repo      *repository.TaskRepo
 	robotRepo *repository.RobotRepo
+	publisher *mqtt.Publisher
 }
 
-// NewTaskService 创建 TaskService 实例。
-func NewTaskService() *TaskService {
+// NewTaskService 创建 TaskService 实例，注入 MQTT Publisher 用于任务下发。
+func NewTaskService(publisher *mqtt.Publisher) *TaskService {
 	return &TaskService{
 		repo:      repository.NewTaskRepo(),
 		robotRepo: repository.NewRobotRepo(),
+		publisher: publisher,
 	}
 }
 
-// Create 创建新任务。自动从机器人信息中获取电站 ID 并关联。
+// Create 创建新任务。自动从机器人信息中获取电站 ID，写入 DB 后通过 MQTT 下发给机器人。
 func (s *TaskService) Create(task *model.Task) error {
 	robot, err := s.robotRepo.GetByID(task.RobotID)
 	if err != nil {
 		return fmt.Errorf("robot not found: %w", err)
 	}
 	task.StationID = robot.StationID
-	return s.repo.Create(task)
+	if err := s.repo.Create(task); err != nil {
+		return err
+	}
+
+	// 任务写入成功后，通过 MQTT 下发给机器人
+	params := map[string]interface{}{
+		"task_id":   task.TaskID,
+		"task_type": task.TaskType,
+		"area_ids":  task.AreaIDs,
+	}
+	if task.PlanStart != nil {
+		params["plan_start"] = task.PlanStart.Format("2006-01-02 15:04:05")
+	}
+	if task.PlanEnd != nil {
+		params["plan_end"] = task.PlanEnd.Format("2006-01-02 15:04:05")
+	}
+	_ = s.publisher.SendCommand(task.RobotID, "task", params)
+
+	// 即时任务下发后立即标记为执行中
+	if task.TaskType == 1 {
+		now := time.Now()
+		task.ActualStart = &now
+		task.TaskStatus = 1
+		_ = s.repo.Update(task)
+	}
+
+	return nil
 }
 
 // GetByID 根据 ID 查询任务详情。
@@ -62,6 +92,7 @@ func (s *TaskService) List(page, size int, stationID, robotID string, taskStatus
 //	0(待执行) → 1(执行中) → 2(已完成)
 //	0(待执行) → 3(已暂停) → 4(已取消)
 //	1(执行中) → 4(已取消)
+//	1(执行中) → 5(失败)
 func (s *TaskService) UpdateStatus(taskID uint, status int8) error {
 	task, err := s.repo.GetByID(taskID)
 	if err != nil {
@@ -81,9 +112,13 @@ func (s *TaskService) UpdateStatus(taskID uint, status int8) error {
 		if task.TaskStatus != 1 {
 			return fmt.Errorf("task can only pause from running state")
 		}
-	case 4: // 取消：已完成的任务不可取消
-		if task.TaskStatus == 2 {
-			return fmt.Errorf("cannot cancel completed task")
+	case 4: // 取消：已完成/失败的任务不可取消
+		if task.TaskStatus == 2 || task.TaskStatus == 5 {
+			return fmt.Errorf("cannot cancel completed or failed task")
+		}
+	case 5: // 失败：仅执行中状态可标记失败
+		if task.TaskStatus != 1 {
+			return fmt.Errorf("task can only fail from running state")
 		}
 	}
 	return s.repo.UpdateStatus(taskID, status)
@@ -115,7 +150,7 @@ func (s *TaskService) SmartSchedule(stationID string) (*model.Task, error) {
 		StationID:  stationID,
 		TaskStatus: 0,
 	}
-	if err := s.repo.Create(task); err != nil {
+	if err := s.Create(task); err != nil {
 		return nil, err
 	}
 	return task, nil

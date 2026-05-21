@@ -3,6 +3,7 @@ package scheduler
 
 import (
 	"ccplatform/internal/model"
+	"ccplatform/internal/mqtt"
 	"ccplatform/internal/repository"
 	"log"
 	"time"
@@ -12,15 +13,17 @@ import (
 
 // TaskScheduler 周期任务调度器，管理定时和周期清扫任务。
 type TaskScheduler struct {
-	cron     *cron.Cron
-	taskRepo *repository.TaskRepo
+	cron      *cron.Cron
+	taskRepo  *repository.TaskRepo
+	publisher *mqtt.Publisher
 }
 
-// NewTaskScheduler 创建调度器实例。
-func NewTaskScheduler() *TaskScheduler {
+// NewTaskScheduler 创建调度器实例，注入 MQTT Publisher 用于任务实例下发。
+func NewTaskScheduler(publisher *mqtt.Publisher) *TaskScheduler {
 	return &TaskScheduler{
-		cron:     cron.New(cron.WithSeconds()),
-		taskRepo: repository.NewTaskRepo(),
+		cron:      cron.New(cron.WithSeconds()),
+		taskRepo:  repository.NewTaskRepo(),
+		publisher: publisher,
 	}
 }
 
@@ -53,9 +56,23 @@ func (s *TaskScheduler) ScheduleTask(task *model.Task) error {
 
 		if err := s.taskRepo.Create(&newTask); err != nil {
 			log.Printf("[Scheduler] Failed to create periodic task %d: %v", task.TaskID, err)
-		} else {
-			log.Printf("[Scheduler] Created periodic task %d (from template %d)", newTask.TaskID, task.TaskID)
+			return
 		}
+		log.Printf("[Scheduler] Created periodic task %d (from template %d)", newTask.TaskID, task.TaskID)
+
+		// 下发新任务实例到机器人
+		params := map[string]interface{}{
+			"task_id":   newTask.TaskID,
+			"task_type": newTask.TaskType,
+			"area_ids":  newTask.AreaIDs,
+		}
+		if newTask.PlanStart != nil {
+			params["plan_start"] = newTask.PlanStart.Format("2006-01-02 15:04:05")
+		}
+		if newTask.PlanEnd != nil {
+			params["plan_end"] = newTask.PlanEnd.Format("2006-01-02 15:04:05")
+		}
+		_ = s.publisher.SendCommand(newTask.RobotID, "task", params)
 	})
 	return err
 }

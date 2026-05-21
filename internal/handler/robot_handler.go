@@ -13,17 +13,14 @@ import (
 
 // RobotHandler 机器人 HTTP 处理器，处理机器人相关的 RESTful API 请求。
 // 包含机器人 CRUD、状态查询和远程控制指令下发。
-//
 type RobotHandler struct {
-	svc       *service.RobotService
-	publisher *mqtt.Publisher // MQTT 下行消息发布器，用于发送控制指令
+	svc *service.RobotService
 }
 
-// NewRobotHandler 创建 RobotHandler 实例，注入 MQTT Publisher 用于指令下发。
+// NewRobotHandler 创建 RobotHandler 实例，publisher 透传给 RobotService 用于指令下发。
 func NewRobotHandler(publisher *mqtt.Publisher) *RobotHandler {
 	return &RobotHandler{
-		svc:       service.NewRobotService(),
-		publisher: publisher,
+		svc: service.NewRobotService(publisher),
 	}
 }
 
@@ -85,7 +82,7 @@ type SendCommandRequest struct {
 	Params map[string]interface{} `json:"params"`                 // 指令参数
 }
 
-// SendCommand 向机器人下发控制指令，通过 MQTT 发送到 tdw/robot/{id}/cmd。
+// SendCommand 向机器人下发控制指令，通过 Service 层校验并下发到 tdw/robot/{id}/cmd。
 // POST /api/v1/robots/:id/cmd
 func (h *RobotHandler) SendCommand(c *gin.Context) {
 	id := c.Param("id")
@@ -94,11 +91,7 @@ func (h *RobotHandler) SendCommand(c *gin.Context) {
 		response.Error(c, errcode.ErrParam)
 		return
 	}
-	if h.publisher == nil {
-		response.ErrorMsg(c, 500, 10011, "MQTT publisher not initialized")
-		return
-	}
-	if err := h.publisher.SendCommand(id, req.Cmd, req.Params); err != nil {
+	if err := h.svc.SendCommand(id, req.Cmd, req.Params); err != nil {
 		response.Error(c, errcode.ErrRobotOffline)
 		return
 	}

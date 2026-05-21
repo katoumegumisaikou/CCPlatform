@@ -13,7 +13,6 @@ package main
 
 import (
 	"ccplatform/internal/config"
-	"ccplatform/internal/model"
 	"ccplatform/internal/mqtt"
 	"ccplatform/internal/repository"
 	"ccplatform/internal/router"
@@ -27,10 +26,6 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
-
-	"gorm.io/driver/mysql"
-	"gorm.io/gorm"
-	"gorm.io/gorm/logger"
 )
 
 func main() {
@@ -78,13 +73,14 @@ func main() {
 		log.Fatalf("Failed to register MQTT hooks: %v", err)
 	}
 
-	// 7. 启动周期任务调度器，用于定时/周期清扫任务
-	taskScheduler := scheduler.NewTaskScheduler()
-	go taskScheduler.Start()
-
-	// 8. 创建 MQTT Publisher，用于下发控制指令到机器人
+	// 7. 创建 MQTT Publisher，用于下发控制指令到机器人
 	//    Topic: tdw/robot/{id}/cmd 和 tdw/robot/{id}/config
 	publisher := mqtt.NewPublisher(mqtt.Server)
+
+	// 8. 启动周期任务调度器，用于定时/周期清扫任务
+	//    注入 Publisher 以在创建任务实例时下发 MQTT 指令
+	taskScheduler := scheduler.NewTaskScheduler(publisher)
+	go taskScheduler.Start()
 
 	// 9. 注册所有 HTTP 路由（REST API）
 	r := router.Setup(hub, publisher)
@@ -121,56 +117,7 @@ func main() {
 	log.Println("Server exited")
 }
 
-// initDB 初始化 MySQL 数据库连接，配置连接池，并自动迁移所有数据模型。
-// GORM AutoMigrate 会根据 model 结构体自动创建/更新表结构（不会删除列）。
+// initDB 初始化数据库连接并自动迁移表结构，由 repository.InitDB 统一处理。
 func initDB() error {
-	var err error
-	repository.DB, err = gorm.Open(mysql.Open(config.Cfg.Database.DSN()), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Info), // 打印 SQL 日志
-	})
-	if err != nil {
-		return fmt.Errorf("connect database: %w", err)
-	}
-
-	// 配置连接池
-	sqlDB, err := repository.DB.DB()
-	if err != nil {
-		return err
-	}
-	sqlDB.SetMaxIdleConns(config.Cfg.Database.MaxIdleConns) // 最大空闲连接数
-	sqlDB.SetMaxOpenConns(config.Cfg.Database.MaxOpenConns) // 最大打开连接数
-
-	// 自动迁移：根据 struct 定义自动建表/加字段
-	if err := repository.DB.AutoMigrate(
-		&model.Station{},
-		&model.Robot{},
-		&model.Task{},
-		&model.Alarm{},
-		&model.User{},
-		&model.Role{},
-		&model.Firmware{},
-		&model.Maintenance{},
-		&model.AlarmRule{},
-		&model.NotifyTemplate{},
-		&model.AuditLog{},
-		&model.LoginLog{},
-		&model.SystemConfig{},
-		&model.Dict{},
-		&model.DictItem{},
-		&model.Organization{},
-		&model.RobotConfig{},
-		&model.RobotPosition{},
-		&model.EnvironmentData{},
-		&model.Camera{},
-		&model.CleaningRecord{},
-		&model.ReportTemplate{},
-		&model.DeviceCredential{},
-		&model.UpgradeRecord{},
-		&model.PasswordReset{},
-	); err != nil {
-		return fmt.Errorf("auto migrate: %w", err)
-	}
-
-	log.Println("[DB] Database initialized and migrated")
-	return nil
+	return repository.InitDB()
 }

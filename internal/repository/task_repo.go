@@ -63,6 +63,11 @@ func (r *TaskRepo) UpdateStatus(id uint, status int8) error {
 	return r.db.Model(&model.Task{}).Where("task_id = ?", id).Update("task_status", status).Error
 }
 
+// UpdateCleanArea 更新任务累计清扫面积，由 MQTT clean 消息处理器调用。
+func (r *TaskRepo) UpdateCleanArea(taskID uint, area float64) error {
+	return r.db.Model(&model.Task{}).Where("task_id = ?", taskID).Update("clean_area", area).Error
+}
+
 // CountByStation 统计指定电站的任务总数。
 func (r *TaskRepo) CountByStation(stationID string) (int64, error) {
 	var count int64
@@ -93,6 +98,31 @@ func (r *TaskRepo) CountRunning() (int64, error) {
 	var count int64
 	err := r.db.Model(&model.Task{}).Where("task_status = 1").Count(&count).Error
 	return count, err
+}
+
+// GetActiveByRobot 查找指定机器人当前活跃的任务（执行中/已暂停/待执行），
+// 优先级: 执行中(1) > 已暂停(3) > 待执行(0)。
+func (r *TaskRepo) GetActiveByRobot(robotID string) (*model.Task, error) {
+	var task model.Task
+	// 1. 优先查执行中
+	err := r.db.Where("robot_id = ? AND task_status = 1", robotID).
+		Order("create_time DESC").First(&task).Error
+	if err == nil {
+		return &task, nil
+	}
+	// 2. 查已暂停（低电量回充场景）
+	err = r.db.Where("robot_id = ? AND task_status = 3", robotID).
+		Order("create_time DESC").First(&task).Error
+	if err == nil {
+		return &task, nil
+	}
+	// 3. 兜底查待执行
+	err = r.db.Where("robot_id = ? AND task_status = 0", robotID).
+		Order("create_time DESC").First(&task).Error
+	if err != nil {
+		return nil, err
+	}
+	return &task, nil
 }
 
 // SumTodayCleanArea 统计今日已完成任务的累计清扫面积（㎡），用于仪表盘展示。

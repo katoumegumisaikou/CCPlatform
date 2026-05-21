@@ -1,45 +1,123 @@
-# TODO
+# TODO: 机器人上行数据 → 任务状态联动
 
-## 监控中心模块 — Redis 缓存层重构
+## 背景
 
-### 当前问题
+当前 MQTT 上行数据处理（handler.go）只更新 robots 表和写入历史记录表，
+**完全没有联动 tasks 表**。这导致：
 
-1. **实时数据走 MySQL 读写**：MQTT handler 收到位置(1Hz)、心跳(5s)、状态(10s) 后直接写 robot 表，GetRealtimeData HTTP 接口再查 robot 表。高频覆盖写入没有持久化意义（历史轨迹已单独写入 robot_positions 表），实时读库浪费数据库资源。
-2. **需求文档写了 Redis 但没实现**：需求规格说明书 2.1.3 明确写了缓存数据库 Redis，实际项目完全没有。
-3. **WebSocket 全量广播**：MQTT handler 全部使用 BroadcastToAll，Hub 已有 BroadcastToStation 方法但未被调用，所有客户端收到全量数据。
+1. 机器人在清扫过程中上报的 `clean` 消息带有 `task_id` 和 `clean_area`，
+   但任务的 `clean_area` 字段始终为 0，任务进度无法实时更新
+2. 机器人 `work_status` 从 1(清扫) 变为 0(空闲) 时，平台不知道任务已完成，
+   任务永远停留在"执行中"状态，除非工作人员手动调用 UpdateStatus API
 
-### 改进方案
+## 目标
 
-引入 Redis 作为实时数据中间层，切断 MQTT → MySQL 的直接高频写入链路：
+让机器人的实时上行数据驱动任务状态变化，实现闭环。
 
+## 具体改动
+
+### 1. TaskRepo 新增方法
+
+**文件**: `internal/repository/task_repo.go`
+
+新增 `UpdateCleanArea(taskID uint, area float64) error`：
+- 更新指定任务的 `clean_area` 字段
+- 实现：`db.Model(&Task{}).Where("task_id = ?", taskID).Update("clean_area", area)`
+
+### 2. MessageHandler 注入 taskRepo
+
+**文件**: `internal/mqtt/handler.go`
+
+- 在 `MessageHandler` 结构体中新增 `taskRepo *repository.TaskRepo` 字段
+- 在 `NewMessageHandler` 中初始化 `taskRepo: repository.NewTaskRepo()`
+
+### 3. handleClean 更新任务清扫面积
+
+**文件**: `internal/mqtt/handler.go` → `handleClean` 方法
+
+在写入 `CleaningRecord` 之后，新增逻辑：
+- 如果 `msg.TaskID > 0`，调用 `h.taskRepo.UpdateCleanArea(msg.TaskID, msg.CleanArea)`
+- 失败不阻塞主流程，仅 log 警告
+
+### 4. handleHeartbeat 检测 work_status 变更 → 自动完成/暂停/失败任务
+
+**文件**: `internal/mqtt/handler.go` → `handleHeartbeat` 方法
+
+旧状态的获取方式：
+1. 先调 `h.robotRepo.GetByID(robotID)` 获取当前机器人记录，记下 `oldWorkStatus`
+2. 再调 `h.robotRepo.UpdateHeartbeat(robotID, ...)` 写新值
+3. 如果 `oldWorkStatus != newWorkStatus`，触发任务联动
+
+每条心跳多一次 DB 查询（GetByID），仅在状态变化时才额外查任务表，开销可接受。
+
+状态变更 → 任务联动对照表：
+
+| 旧 work_status | 新 work_status | 动作 |
+|---------------|---------------|------|
+| 1 (清扫) | 0 (空闲) | 查找活跃任务(status=1)，标记为已完成(2)，设置 actual_end |
+| 1 (清扫) | 2 (充电) | 查找活跃任务(status=1)，标记为已暂停(3)。机器人低电量回充，充完可能继续 |
+| 1 (清扫) | 3 (故障) | 查找活跃任务(status=1)，标记为失败(5) |
+| 2 (充电) | 1 (清扫) | 查找暂停的任务(status=3)，恢复为执行中(1)。机器人充满电继续扫 |
+| 3 (故障) | 0 (空闲) | 不自动处理（故障恢复需人工确认，通过 API 手动操作） |
+
+查找活跃任务使用已有的 `taskRepo.GetActiveByRobot(robotID)` 方法。
+但该方法目前只查 status=1 和 0，需扩展为同时查 status=3（已暂停），
+以便"充电→清扫"时能找到暂停的任务恢复。详见第 5 节。
+
+### 5. GetActiveByRobot 扩展支持查询暂停任务
+
+**文件**: `internal/repository/task_repo.go` → `GetActiveByRobot` 方法
+
+当前实现只查 `task_status = 1` 和 `task_status = 0`。
+为支持"充电→清扫"时恢复暂停的任务，需增加对 `task_status = 3`（已暂停）的查询。
+
+修改后的优先级：
+1. 先查执行中 (status=1) — 只有一个机器人同时只执行一个任务
+2. 再查已暂停 (status=3) — 可能因低电量回充而暂停
+3. 最后查待执行 (status=0) — 作为兜底
+
+### 6. 提取公共函数 onWorkStatusChange
+
+**文件**: `internal/mqtt/handler.go`
+
+`handleHeartbeat` 和 `handleStatus` 都携带 `work_status`，都会触发变更检测。
+提取一个公共函数避免重复代码：
+
+```go
+func (h *MessageHandler) onWorkStatusChange(robotID string, oldStatus, newStatus int8) {
+    // 状态未变化，跳过
+    if oldStatus == newStatus {
+        return
+    }
+    switch {
+    case oldStatus == 1 && newStatus == 0: // 清扫→空闲: 完成
+        h.completeActiveTask(robotID)
+    case oldStatus == 1 && newStatus == 2: // 清扫→充电: 暂停
+        h.pauseActiveTask(robotID)
+    case oldStatus == 1 && newStatus == 3: // 清扫→故障: 失败
+        h.failActiveTask(robotID)
+    case oldStatus == 2 && newStatus == 1: // 充电→清扫: 恢复
+        h.resumePausedTask(robotID)
+    }
+}
 ```
-机器人 --MQTT--> handler.go
-                  ├── 写 Redis 快照 (robot:heartbeat:{id} / robot:realtime:{id} /
-                  robot:status:{id})
 
-                  ├── WebSocket 推送到对应电站客户端 (BroadcastToStation)
-                  ├── 位置历史 → robot_positions 表 (保留)
-                  └── 心跳 → 每 10s 最多写一次 MySQL last_heartbeat
+**注意**: `handleStatus` 和 `handleHeartbeat` 都会触发此函数。因为 heartbeat(5s) 频率高于 status(10s)，
+大多数变更由 heartbeat 先捕获。status 消息到达时 `oldStatus` 已被 heartbeat 更新，`oldStatus == newStatus`，
+条件不满足，直接跳过，不会重复处理。
 
-前端首次加载 → HTTP API → 读 Redis 快照 → 返回
-                                       └── Redis 不可用 → 降级查 MySQL
-后续更新 → WebSocket 增量推送
-```
+### 7. handleStatus 同步检测逻辑
 
-### Redis Key 设计
+**文件**: `internal/mqtt/handler.go` → `handleStatus` 方法
 
-| Key | 类型 | 字段 | TTL |
-|-----|------|------|-----|
-| `robot:heartbeat:{id}` | Hash | online_status, battery_level, work_status, last_heartbeat | 30s（过期=离线） |
-| `robot:realtime:{id}` | Hash | pos_x, pos_y, pos_z, heading, speed | 15s（过期=位置陈旧） |
-| `robot:status:{id}` | Hash | work_status, speed, clean_area, fault_code, temperature, humidity, light_intensity, wind_speed | 30s（过期=状态陈旧） |
-| `robot:heartbeat_write:{id}` | Hash | last_write_ts | 60s（心跳写 MySQL 去重） |
+与 handleHeartbeat 相同模式：
+1. 先 `GetByID(robotID)` 获取旧 work_status
+2. 再 `UpdateStatus(robotID, data)` 写新值
+3. 从 `data` 中提取新的 work_status，调用 `onWorkStatusChange`
 
-### 改造计划
+## 影响范围
 
-- [ ] 添加 Redis 依赖和配置（go-redis/v9, config/config.yaml, internal/config/config.go）
-- [ ] 新增 internal/cache/robot_state.go（Redis 客户端封装，三张 Hash 的存取方法）
-- [ ] 改造 MQTT handler：position/status/heartbeat 写 Redis 快照而非 MySQL robot 表，BroadcastToAll 改为 BroadcastToStation
-- [ ] 心跳降频写 MySQL：每 10s 最多写一次 last_heartbeat，通过 Redis 标记 key 去重
-- [ ] 改造 monitor_service.GetRealtimeData：从 Redis 读快照，Redis 不可用时降级查 MySQL
-- [ ] 改造 WebSocket 推送：按电站过滤（BroadcastToStation），不再全量广播
+- `internal/repository/task_repo.go` — 新增 `UpdateCleanArea` 方法，扩展 `GetActiveByRobot` 支持 status=3
+- `internal/mqtt/handler.go` — 结构体 +1 字段(taskRepo)，新增 `onWorkStatusChange` 及 4 个辅助方法，
+  handleClean/heartbeat/handleStatus 各加一段逻辑
+- 不涉及 handler/service/router 层，不改变 HTTP 接口

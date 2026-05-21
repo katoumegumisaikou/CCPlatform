@@ -5,6 +5,8 @@ package repository
 
 import (
 	"ccplatform/internal/config"
+	"ccplatform/internal/model"
+	"fmt"
 
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
@@ -14,8 +16,7 @@ import (
 // DB 是全局数据库连接实例，由 InitDB 初始化后供所有 Repo 使用。
 var DB *gorm.DB
 
-// InitDB 初始化 MySQL 数据库连接。
-// 从配置文件读取 DSN，创建 GORM 连接池，并设置最大空闲/活跃连接数。
+// InitDB 初始化 MySQL 数据库连接，配置连接池，并自动迁移所有数据模型。
 // 该函数在 main.go 启动时调用，必须在任何 Repo 操作之前完成。
 func InitDB() error {
 	var err error
@@ -23,14 +24,46 @@ func InitDB() error {
 		Logger: logger.Default.LogMode(logger.Info), // 启用 SQL 日志，便于调试
 	})
 	if err != nil {
-		return err
+		return fmt.Errorf("connect database: %w", err)
 	}
-	// 获取底层 sql.DB 以配置连接池参数
+
 	sqlDB, err := DB.DB()
 	if err != nil {
 		return err
 	}
 	sqlDB.SetMaxIdleConns(config.Cfg.Database.MaxIdleConns) // 最大空闲连接数
 	sqlDB.SetMaxOpenConns(config.Cfg.Database.MaxOpenConns) // 最大打开连接数
+
+	// GORM AutoMigrate 根据 struct 定义自动创建/更新表结构（不会删除已有列）
+	if err := DB.AutoMigrate(
+		&model.Station{},
+		&model.Robot{},
+		&model.Task{},
+		&model.Alarm{},
+		&model.User{},
+		&model.Role{},
+		&model.Firmware{},
+		&model.Maintenance{},
+		&model.AlarmRule{},
+		&model.NotifyTemplate{},
+		&model.AuditLog{},
+		&model.LoginLog{},
+		&model.SystemConfig{},
+		&model.Dict{},
+		&model.DictItem{},
+		&model.Organization{},
+		&model.RobotConfig{},
+		&model.RobotPosition{},
+		&model.EnvironmentData{},
+		&model.Camera{},
+		&model.CleaningRecord{},
+		&model.ReportTemplate{},
+		&model.DeviceCredential{},
+		&model.UpgradeRecord{},
+		&model.PasswordReset{},
+	); err != nil {
+		return fmt.Errorf("auto migrate: %w", err)
+	}
+
 	return nil
 }

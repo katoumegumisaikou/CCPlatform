@@ -55,7 +55,7 @@ func Setup(hub *ws.Hub, publisher *mqtt.Publisher) *gin.Engine {
 		User:           handler.NewUserHandler(),
 		Station:        handler.NewStationHandler(),
 		Robot:          handler.NewRobotHandler(publisher),
-		Task:           handler.NewTaskHandler(),
+		Task:           handler.NewTaskHandler(publisher),
 		Alarm:          handler.NewAlarmHandler(),
 		Monitor:        handler.NewMonitorHandler(),
 		Analytics:      handler.NewAnalyticsHandler(),

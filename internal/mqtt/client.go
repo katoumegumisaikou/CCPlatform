@@ -21,7 +21,7 @@ func NewPublisher(server *mqtt.Server) *Publisher {
 
 // SendCommand 下发控制指令到指定机器人。
 // Topic: tdw/robot/{robotID}/cmd
-// 指令示例: start(启动清扫), stop(停止), return(回仓), reset(复位)
+// 指令示例: start(启动清扫), stop(停止), return(回仓), reset(复位), task(任务下发)
 func (p *Publisher) SendCommand(robotID, cmd string, params map[string]interface{}) error {
 	topic := fmt.Sprintf("tdw/robot/%s/cmd", robotID)
 	payload := map[string]interface{}{
@@ -33,7 +33,8 @@ func (p *Publisher) SendCommand(robotID, cmd string, params map[string]interface
 		return fmt.Errorf("marshal cmd: %w", err)
 	}
 
-	if err := p.server.Publish(topic, data, false, 0); err != nil {
+	// 控制指令使用 QoS 1，确保至少一次送达；机器人端需幂等处理
+	if err := p.server.Publish(topic, data, false, 1); err != nil {
 		return fmt.Errorf("publish cmd: %w", err)
 	}
 	log.Printf("[MQTT] Published cmd to %s: %s", topic, string(data))
@@ -50,7 +51,8 @@ func (p *Publisher) SendConfig(robotID string, cfg map[string]interface{}) error
 		return fmt.Errorf("marshal config: %w", err)
 	}
 
-	if err := p.server.Publish(topic, data, false, 0); err != nil {
+	// 配置下发使用 QoS 1，确保至少一次送达；机器人端需幂等处理
+	if err := p.server.Publish(topic, data, false, 1); err != nil {
 		return fmt.Errorf("publish config: %w", err)
 	}
 	log.Printf("[MQTT] Published config to %s: %s", topic, string(data))

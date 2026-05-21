@@ -2,6 +2,7 @@ package handler
 
 import (
 	"ccplatform/internal/model"
+	"ccplatform/internal/mqtt"
 	"ccplatform/internal/service"
 	"ccplatform/pkg/errcode"
 	"ccplatform/pkg/response"
@@ -17,9 +18,9 @@ type TaskHandler struct {
 	svc *service.TaskService
 }
 
-// NewTaskHandler 创建 TaskHandler 实例。
-func NewTaskHandler() *TaskHandler {
-	return &TaskHandler{svc: service.NewTaskService()}
+// NewTaskHandler 创建 TaskHandler 实例，publisher 透传给 TaskService 用于任务下发。
+func NewTaskHandler(publisher *mqtt.Publisher) *TaskHandler {
+	return &TaskHandler{svc: service.NewTaskService(publisher)}
 }
 
 // List 任务列表接口，支持分页和多维度筛选。

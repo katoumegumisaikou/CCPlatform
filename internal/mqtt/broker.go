@@ -52,12 +52,12 @@ func InitBroker(port int) error {
 	return nil
 }
 
-// GetTCPPort 获取一个可用的随机 TCP 端口，用于测试。
-func GetTCPPort() int {
-	ln, err := net.Listen("tcp", ":0")
+// GetTCPPort 使用1883端口创建临时 TCP 监听器，获取系统分配的实际端口号（如果1883被占用），然后关闭监听器并返回端口号。
+func GetTCPPort() (int, error) {
+	ln, err := net.Listen("tcp", ":1883")
 	if err != nil {
-		return 1883
+		return 1883, err
 	}
 	defer ln.Close()
-	return ln.Addr().(*net.TCPAddr).Port
+	return ln.Addr().(*net.TCPAddr).Port, nil
 }
