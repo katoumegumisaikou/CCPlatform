@@ -4,6 +4,7 @@ import (
 	"ccplatform/internal/model"
 	"ccplatform/internal/mqtt"
 	"ccplatform/internal/repository"
+	"ccplatform/internal/scheduler"
 	"fmt"
 	"log"
 	"time"
@@ -14,14 +15,16 @@ type TaskService struct {
 	repo      *repository.TaskRepo
 	robotRepo *repository.RobotRepo
 	publisher *mqtt.Publisher
+	scheduler *scheduler.TaskScheduler
 }
 
-// NewTaskService 创建 TaskService 实例，注入 MQTT Publisher 用于任务下发。
-func NewTaskService(publisher *mqtt.Publisher) *TaskService {
+// NewTaskService 创建 TaskService 实例，注入 MQTT Publisher 和调度器。
+func NewTaskService(publisher *mqtt.Publisher, sch *scheduler.TaskScheduler) *TaskService {
 	return &TaskService{
 		repo:      repository.NewTaskRepo(),
 		robotRepo: repository.NewRobotRepo(),
 		publisher: publisher,
+		scheduler: sch,
 	}
 }
 
@@ -36,7 +39,28 @@ func (s *TaskService) Create(task *model.Task) error {
 		return err
 	}
 
-	// 任务写入成功后，通过 MQTT 下发给机器人
+	// 周期任务：注册到 cron 调度器，按 cron_expr 重复执行
+	if task.TaskType == 3 {
+		if err := s.scheduler.ScheduleTask(task); err != nil {
+			return fmt.Errorf("schedule periodic task: %w", err)
+		}
+		return nil
+	}
+
+	// 定时任务：plan_start 在未来则注册为一次性调度，到点执行后自动移除
+	if task.TaskType == 2 && task.PlanStart != nil && task.PlanStart.After(time.Now()) {
+		cronExpr := fmt.Sprintf("0 %d %d %d %d *",
+			task.PlanStart.Minute(), task.PlanStart.Hour(),
+			task.PlanStart.Day(), task.PlanStart.Month())
+		task.CronExpr = cronExpr
+		_ = s.repo.Update(task) // 回写生成的 cron_expr 到 DB
+		if err := s.scheduler.ScheduleOneShot(task); err != nil {
+			return fmt.Errorf("schedule one-shot task: %w", err)
+		}
+		return nil
+	}
+
+	// 即时任务 / plan_start 已过期的定时任务：立即通过 MQTT 下发给机器人
 	params := map[string]interface{}{
 		"task_id":   task.TaskID,
 		"task_type": task.TaskType,
