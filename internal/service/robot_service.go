@@ -8,6 +8,30 @@ import (
 	"time"
 )
 
+// 控制指令常量，统一管理所有下发到机器人的指令名称。
+const (
+	CmdStart  = "start"
+	CmdStop   = "stop"
+	CmdReturn = "return"
+	CmdReset  = "reset"
+)
+
+// cmdTaskEffect 定义指令下发后对任务状态的联动效果。
+// requireRunning: 仅当任务正在执行中才联动；setStart: 写入实际开始时间；setEnd: 写入实际结束时间。
+type cmdTaskEffect struct {
+	targetStatus   int8
+	requireRunning bool
+	setStart       bool
+	setEnd         bool
+}
+
+// cmdEffects 指令 → 任务联动效果映射表，新增指令时在此注册即可。
+var cmdEffects = map[string]cmdTaskEffect{
+	CmdStart:  {targetStatus: 1, setStart: true},
+	CmdStop:   {targetStatus: 3, requireRunning: true},
+	CmdReturn: {targetStatus: 2, requireRunning: true, setEnd: true},
+}
+
 // RobotService 机器人业务逻辑层，处理机器人的增删改查和远程控制。
 type RobotService struct {
 	repo      *repository.RobotRepo

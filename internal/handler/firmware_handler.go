@@ -2,6 +2,7 @@ package handler
 
 import (
 	"ccplatform/internal/model"
+	"ccplatform/internal/mqtt"
 	"ccplatform/internal/service"
 	"ccplatform/pkg/errcode"
 	"ccplatform/pkg/response"
@@ -15,8 +16,8 @@ type FirmwareHandler struct {
 	svc *service.FirmwareService
 }
 
-func NewFirmwareHandler() *FirmwareHandler {
-	return &FirmwareHandler{svc: service.NewFirmwareService()}
+func NewFirmwareHandler(publisher *mqtt.Publisher) *FirmwareHandler {
+	return &FirmwareHandler{svc: service.NewFirmwareService(publisher)}
 }
 
 // List 分页查询固件列表。

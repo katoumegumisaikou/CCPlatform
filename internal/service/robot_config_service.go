@@ -11,12 +11,14 @@ import (
 type RobotConfigService struct {
 	repo      *repository.RobotConfigRepo
 	robotRepo *repository.RobotRepo
+	publisher *mqtt.Publisher
 }
 
 func NewRobotConfigService() *RobotConfigService {
 	return &RobotConfigService{
 		repo:      repository.NewRobotConfigRepo(),
 		robotRepo: repository.NewRobotRepo(),
+		publisher: mqtt.NewPublisher(mqtt.Server),
 	}
 }
 
@@ -57,8 +59,7 @@ func (s *RobotConfigService) ApplyConfig(robotID, configID string) error {
 		return fmt.Errorf("config not found: %w", err)
 	}
 
-	publisher := mqtt.NewPublisher(mqtt.Server)
-	return publisher.SendConfig(robotID, map[string]interface{}{
+	return s.publisher.SendConfig(robotID, map[string]interface{}{
 		"action":      "apply_config",
 		"config_id":   cfg.ConfigID,
 		"config_data": cfg.ConfigData,

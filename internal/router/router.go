@@ -64,7 +64,7 @@ func Setup(hub *ws.Hub, publisher *mqtt.Publisher, taskScheduler *scheduler.Task
 		Dict:           handler.NewDictHandler(),
 		Organization:   handler.NewOrganizationHandler(),
 		Audit:          handler.NewAuditHandler(),
-		Firmware:       handler.NewFirmwareHandler(),
+		Firmware:       handler.NewFirmwareHandler(publisher),
 		Maintenance:    handler.NewMaintenanceHandler(),
 		RobotConfig:    handler.NewRobotConfigHandler(),
 		AlarmRule:      handler.NewAlarmRuleHandler(),

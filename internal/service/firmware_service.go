@@ -11,12 +11,14 @@ import (
 type FirmwareService struct {
 	repo      *repository.FirmwareRepo
 	robotRepo *repository.RobotRepo
+	publisher *mqtt.Publisher
 }
 
-func NewFirmwareService() *FirmwareService {
+func NewFirmwareService(publisher *mqtt.Publisher) *FirmwareService {
 	return &FirmwareService{
 		repo:      repository.NewFirmwareRepo(),
 		robotRepo: repository.NewRobotRepo(),
+		publisher: publisher,
 	}
 }
 
@@ -57,9 +59,7 @@ func (s *FirmwareService) DispatchUpgrade(robotID, firmwareID string) error {
 		return fmt.Errorf("firmware not found: %w", err)
 	}
 
-	// 发布 MQTT 升级指令
-	publisher := mqtt.NewPublisher(mqtt.Server)
-	return publisher.SendConfig(robotID, map[string]interface{}{
+	return s.publisher.SendConfig(robotID, map[string]interface{}{
 		"action":       "upgrade",
 		"firmware_id":  fw.FirmwareID,
 		"version":      fw.Version,
