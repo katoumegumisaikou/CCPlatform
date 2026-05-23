@@ -1,6 +1,6 @@
 # TDW CCPlatform - 拓达威光伏清扫机器人云控平台
 
-基于 Go 语言开发的光伏清扫机器人云端管理与控制平台后端服务。
+光伏清扫机器人云端管理与控制平台，包含 Go 后端服务和 React 前端管理端。
 
 ## 项目概述
 
@@ -28,12 +28,13 @@
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│                        展示层 (Frontend)                      │
-│         Web 管理端 / 移动 APP / 大屏展示 (WebSocket)          │
+│                    展示层 (Frontend)                           │
+│  React 19 + TypeScript + Ant Design 6 + Vite                 │
+│  Web 管理端 (HTTP REST API + WebSocket)                       │
 └──────────────────────────┬───────────────────────────────────┘
                            │ HTTP REST API / WebSocket
 ┌──────────────────────────▼───────────────────────────────────┐
-│                       服务层 (Service)                        │
+│                    应用层 (Application)                        │
 │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────────────┐ │
 │  │ 电站服务  │ │ 机器人服务│ │ 任务服务  │ │ 告警/监控/分析服务│ │
 │  └──────────┘ └──────────┘ └──────────┘ └──────────────────┘ │
@@ -49,24 +50,26 @@
 └──────────────────────────┬───────────────────────────────────┘
                            │
 ┌──────────────────────────▼───────────────────────────────────┐
-│                       接入层 (Access)                         │
+│                    接入层 (Access)                             │
 │  ┌──────────────────┐  ┌──────────────────┐                  │
 │  │ MQTT Broker       │  │ WebSocket Hub    │                  │
 │  │ (mochi-mqtt)      │  │ (gorilla/ws)     │                  │
-│  │ 端口: 1883        │  │ 端口: 8080/ws    │                  │
+│  │ 端口: 1883        │  │ 路径: /ws        │                  │
 │  └────────┬─────────┘  └──────────────────┘                  │
 └───────────┼──────────────────────────────────────────────────┘
             │ MQTT 消息
 ┌───────────▼──────────────────────────────────────────────────┐
-│                       数据层 (Storage)                        │
+│                    数据层 (Storage)                           │
 │  ┌──────────────────┐  ┌──────────────────┐                  │
 │  │ MySQL 8.0         │  │ GORM ORM         │                  │
-│  │ 25+ 业务表        │  │ 自动迁移 + 种子  │                  │
+│  │ 21 业务表         │  │ 自动迁移 + 种子  │                  │
 │  └──────────────────┘  └──────────────────┘                  │
 └──────────────────────────────────────────────────────────────┘
 ```
 
 ## 技术栈
+
+### 后端
 
 | 组件 | 技术选型 | 用途 |
 |------|---------|------|
@@ -81,19 +84,33 @@
 | 配置 | Viper | 配置文件管理 |
 | 定时任务 | robfig/cron v3 | 周期清扫任务调度 |
 
+### 前端
+
+| 组件 | 技术选型 | 用途 |
+|------|---------|------|
+| 框架 | React 19 | UI 组件开发 |
+| 语言 | TypeScript | 类型安全 |
+| 构建工具 | Vite | 开发与打包 |
+| UI 组件库 | Ant Design 6 | 企业级 UI 组件 |
+| 图表 | ECharts (echarts-for-react) | 数据可视化 |
+| 地图 | Leaflet (react-leaflet) | GIS 地图展示 |
+| 状态管理 | Zustand 5 | 全局状态 |
+| 路由 | React Router 7 | 前端路由 |
+| HTTP 客户端 | Axios | API 请求 |
+
 ## 项目结构
 
 ```
 CCPlatform/
 ├── cmd/server/main.go              # 程序入口，启动流程:
 │                                   #   配置→DB→种子数据→WebSocket→MQTT→Hook
-│                                   #   →调度器→Publisher→HTTP Server→优雅关闭
+│                                   #   →Publisher→调度器→HTTP Server→优雅关闭
 ├── config/config.yaml              # 配置文件（数据库、MQTT、JWT、HTTP等）
 ├── migrations/init.sql             # MySQL 建表和初始化数据脚本
 ├── Makefile                        # 构建/运行/测试/数据库初始化
 ├── internal/
 │   ├── config/config.go            # 配置结构体定义和加载
-│   ├── model/                      # 数据模型（GORM，25张表）
+│   ├── model/                      # 数据模型（GORM，21张表）
 │   │   ├── station.go              # 光伏电站
 │   │   ├── robot.go                # 清扫机器人
 │   │   ├── robot_config.go         # 机器人配置参数
@@ -104,7 +121,7 @@ CCPlatform/
 │   │   ├── user.go                 # 系统用户
 │   │   ├── role.go                 # 角色权限
 │   │   ├── organization.go         # 组织架构
-│   │   ├── firmware.go             # 固件版本
+│   │   ├── firmware.go             # 固件版本 + 升级记录
 │   │   ├── maintenance.go          # 维护保养
 │   │   ├── camera.go               # 摄像头
 │   │   ├── dict.go                 # 数据字典
@@ -113,11 +130,9 @@ CCPlatform/
 │   │   ├── login_log.go            # 登录日志
 │   │   ├── notify_template.go      # 通知模板
 │   │   ├── report_template.go      # 报告模板
-│   │   ├── device_credential.go    # 设备凭证
+│   │   ├── device_credential.go    # 设备凭证 + 密码重置 + 升级记录
 │   │   ├── cleaning_record.go      # 清扫记录
-│   │   ├── environment_data.go     # 环境数据
-│   │   ├── firmware.go             # 固件信息 (含 upgrade_record)
-│   │   └── password_reset.go       # 密码重置
+│   │   └── environment_data.go     # 环境数据
 │   ├── repository/                 # 数据访问层（24个Repository）
 │   │   ├── db.go                   # 数据库连接初始化
 │   │   ├── station_repo.go         # 电站数据操作
@@ -143,13 +158,13 @@ CCPlatform/
 │   │   ├── robot_config_repo.go      # 机器人配置数据操作
 │   │   ├── password_reset_repo.go    # 密码重置数据操作
 │   │   └── upgrade_record_repo.go    # 升级记录数据操作
-│   ├── service/                    # 业务逻辑层（22个Service）
+│   ├── service/                    # 业务逻辑层（20个Service）
 │   │   ├── station_service.go      # 电站业务
 │   │   ├── robot_service.go        # 机器人业务
 │   │   ├── task_service.go         # 任务业务（CRUD+状态流转+智能排班）
 │   │   ├── alarm_service.go        # 告警业务
 │   │   ├── alarm_rule_service.go   # 告警规则业务
-│   │   ├── user_service.go         # 用户业务（登录+RBAC+验证码+密码重置）
+│   │   ├── user_service.go         # 用户业务（登录+RBAC+密码重置）
 │   │   ├── captcha_service.go      # 图形验证码服务
 │   │   ├── monitor_service.go      # 监控中心（Dashboard+实时数据+轨迹+环境）
 │   │   ├── analytics_service.go    # 数据分析（经济+效率+报表+对比+时序+导出）
@@ -196,19 +211,65 @@ CCPlatform/
 │   │   ├── rbac.go                 # 角色权限检查
 │   │   ├── audit.go                # 操作审计记录
 │   │   └── cors.go                 # 跨域支持
-│   └── router/                     # 路由注册
-│       ├── router.go               # 主路由
+│   └── router/                     # 路由注册（13个文件）
+│       ├── router.go               # 主路由（入口、WebSocket、健康检查）
 │       ├── auth.go                 # 认证子路由
 │       ├── station.go              # 电站子路由
 │       ├── robot.go                # 机器人和配置子路由
 │       ├── task.go                 # 任务子路由
-│       └── alarm.go                # 告警和规则子路由
-└── pkg/                            # 公共工具包
-    ├── errcode/errcode.go          # 统一错误码定义
-    ├── response/response.go        # 统一 JSON 响应格式
-    └── util/
-        ├── jwt.go                  # JWT 生成和解析
-        └── hash.go                 # bcrypt 密码哈希
+│       ├── alarm.go                # 告警、规则和通知子路由
+│       ├── monitor.go              # 监控子路由
+│       ├── analytics.go            # 数据分析和预测子路由
+│       ├── user.go                 # 用户、角色和登录日志子路由
+│       ├── system.go               # 系统配置、字典和审计日志子路由
+│       ├── organization.go         # 组织架构子路由
+│       ├── device.go               # 固件、维护和摄像头子路由
+│       └── report.go               # 报告模板和备份子路由
+├── pkg/                            # 公共工具包
+│   ├── errcode/errcode.go          # 统一错误码定义
+│   ├── response/response.go        # 统一 JSON 响应格式
+│   └── util/
+│       ├── id.go                   # 唯一 ID 生成（雪花算法）
+│       ├── jwt.go                  # JWT 生成和解析
+│       └── hash.go                 # bcrypt 密码哈希
+└── frontend/                       # 前端项目 (React + TypeScript + Vite)
+    ├── src/
+    │   ├── api/                    # API 请求层，按模块拆分
+    │   │   ├── client.ts           # Axios 实例（Token 注入 + 响应解包）
+    │   │   ├── auth.ts             # 认证 API
+    │   │   ├── stations.ts         # 电站 API
+    │   │   ├── robots.ts           # 机器人 API（含配置下发）
+    │   │   ├── tasks.ts            # 任务 API（含智能排班）
+    │   │   ├── alarms.ts           # 告警 API（含规则管理）
+    │   │   ├── monitor.ts          # 监控 API（Dashboard + 轨迹 + 环境）
+    │   │   ├── analytics.ts        # 数据分析 + 智能预测 API
+    │   │   └── system.ts           # 系统管理 API（用户/角色/组织/配置/字典等）
+    │   ├── components/
+    │   │   ├── Layout/AppLayout.tsx # 全局布局（侧边栏 + 顶栏 + 面包屑）
+    │   │   └── GisMap/index.tsx     # Leaflet GIS 地图组件
+    │   ├── hooks/useWebSocket.ts    # WebSocket 实时推送 Hook
+    │   ├── pages/                   # 页面组件，按功能模块拆分
+    │   │   ├── Login/               # 登录页（验证码 + JWT 认证）
+    │   │   ├── Dashboard/           # 仪表盘（统计卡片 + 图表）
+    │   │   ├── Stations/            # 电站管理（CRUD + 地图选点）
+    │   │   ├── Robots/              # 机器人管理（CRUD + 控制指令）
+    │   │   ├── Tasks/               # 任务管理（CRUD + 智能排班 + 进度跟踪）
+    │   │   ├── Alarms/              # 告警中心（记录处理 + 规则配置）
+    │   │   ├── Monitor/             # 监控中心（实时数据 + 轨迹回放 + GIS）
+    │   │   ├── Analytics/           # 数据分析（经济/效率/运行/对比/时序 + 导出）
+    │   │   ├── Predictions/         # 智能预测（效率预测 + 故障预测 + 策略优化）
+    │   │   ├── System/              # 系统管理（用户/角色/组织/配置/字典/审计等10个Tab）
+    │   │   ├── Firmwares/           # 固件管理（上传 + OTA升级）
+    │   │   ├── Maintenance/         # 维护保养（计划 + 提醒）
+    │   │   ├── Cameras/             # 摄像头管理（CRUD）
+    │   │   └── Profile/             # 个人中心
+    │   ├── store/authStore.ts       # Zustand 认证状态管理
+    │   ├── types/index.ts           # 全局 TypeScript 类型定义
+    │   ├── utils/index.ts           # 常量映射（状态码 → 文本/颜色）
+    │   └── App.tsx                  # 路由配置 + 权限守卫
+    ├── package.json
+    ├── vite.config.ts
+    └── tsconfig.json
 ```
 
 ## 快速开始
@@ -270,19 +331,32 @@ make test
 make tidy
 ```
 
-### 4. 启动流程
+### 4. 启动前端
+
+```bash
+cd frontend
+npm install
+npm run dev        # 开发模式，默认 http://localhost:5173
+npm run build      # 生产构建
+```
+
+前端开发服务器默认代理 API 请求到后端 `http://localhost:8080`。
+
+### 5. 启动流程
 
 程序启动后依次执行：
 1. 加载配置文件 (config/config.yaml)
-2. 连接 MySQL 并自动迁移 25 张业务表
+2. 连接 MySQL 并自动迁移 21 张业务表
 3. 初始化 5 种默认角色和 admin 管理员账号
 4. 启动 WebSocket Hub（实时推送）
 5. 启动嵌入式 MQTT Broker（端口 1883）
 6. 注册 MQTT 消息处理器（心跳/位置/状态/告警）
-7. 启动周期任务调度器（定时清扫）
-8. 注册 HTTP 路由并启动服务（端口 8080）
+7. 创建 MQTT Publisher（下行指令下发）
+8. 启动周期任务调度器（定时/周期清扫任务）
+9. 注册 HTTP 路由并启动服务（端口 8080）
+10. 阻塞等待信号，收到 SIGINT/SIGTERM 后优雅关闭
 
-### 5. 默认账号
+### 6. 默认账号
 
 | 用户名 | 密码 | 角色 |
 |--------|------|------|
@@ -476,13 +550,13 @@ PUT    /robot-configs/:id         # 更新配置模板 [RBAC: robot:config]
 DELETE /robot-configs/:id         # 删除配置模板 [RBAC: robot:config]
 ```
 
-### 通知模板 (`/api/v1/notify/templates`)
+### 通知模板 (`/api/v1/notify`)
 
 ```
-GET    /notify/templates          # 通知模板列表
-POST   /notify/templates          # 创建通知模板 [RBAC: notify:config]
-PUT    /notify/templates/:id      # 更新通知模板 [RBAC: notify:config]
-DELETE /notify/templates/:id      # 删除通知模板 [RBAC: notify:config]
+GET    /notify                    # 通知模板列表
+POST   /notify                    # 创建通知模板 [RBAC: notify:config]
+PUT    /notify/:id                # 更新通知模板 [RBAC: notify:config]
+DELETE /notify/:id                # 删除通知模板 [RBAC: notify:config]
 ```
 
 ### 摄像头 (`/api/v1/cameras`)
@@ -517,6 +591,12 @@ POST   /backups/:filename/restore # 恢复备份 [RBAC: system:config]
 ```
 GET    /api/v1/audit-logs         # 操作审计日志列表
 GET    /api/v1/login-logs         # 登录日志列表
+```
+
+### 健康检查
+
+```
+GET    /health                    # 服务健康检查
 ```
 
 ### WebSocket
