@@ -3,6 +3,7 @@ package service
 import (
 	"ccplatform/internal/model"
 	"ccplatform/internal/repository"
+	"ccplatform/pkg/util"
 	"fmt"
 )
 
@@ -22,7 +23,7 @@ type OrgTreeNode struct {
 }
 
 func (s *OrganizationService) Create(org *model.Organization) error {
-	org.OrgID = generateID()
+	org.OrgID = util.GenerateID()
 	return s.repo.Create(org)
 }
 

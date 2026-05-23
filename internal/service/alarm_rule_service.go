@@ -3,6 +3,7 @@ package service
 import (
 	"ccplatform/internal/model"
 	"ccplatform/internal/repository"
+	"ccplatform/pkg/util"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -42,7 +43,7 @@ func NewAlarmRuleService() *AlarmRuleService {
 }
 
 func (s *AlarmRuleService) Create(rule *model.AlarmRule) error {
-	rule.RuleID = generateID()
+	rule.RuleID = util.GenerateID()
 	return s.repo.Create(rule)
 }
 

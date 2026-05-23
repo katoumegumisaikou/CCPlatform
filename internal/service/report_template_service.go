@@ -3,6 +3,7 @@ package service
 import (
 	"ccplatform/internal/model"
 	"ccplatform/internal/repository"
+	"ccplatform/pkg/util"
 	"fmt"
 )
 
@@ -16,7 +17,7 @@ func NewReportTemplateService() *ReportTemplateService {
 }
 
 func (s *ReportTemplateService) Create(tpl *model.ReportTemplate) error {
-	tpl.TplID = generateID()
+	tpl.TplID = util.GenerateID()
 	return s.repo.Create(tpl)
 }
 

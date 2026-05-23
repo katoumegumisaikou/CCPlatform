@@ -3,6 +3,7 @@ package service
 import (
 	"ccplatform/internal/model"
 	"ccplatform/internal/repository"
+	"ccplatform/pkg/util"
 	"fmt"
 )
 
@@ -16,7 +17,7 @@ func NewMaintenanceService() *MaintenanceService {
 }
 
 func (s *MaintenanceService) Create(m *model.Maintenance) error {
-	m.MaintID = generateID()
+	m.MaintID = util.GenerateID()
 	return s.repo.Create(m)
 }
 

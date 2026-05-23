@@ -3,8 +3,7 @@ package middleware
 import (
 	"ccplatform/internal/model"
 	"ccplatform/internal/repository"
-	"crypto/rand"
-	"encoding/hex"
+	"ccplatform/pkg/util"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -42,7 +41,7 @@ func Audit() gin.HandlerFunc {
 		targetResource := method + " " + c.Request.URL.Path
 
 		logEntry := &model.AuditLog{
-			LogID:          generateAuditID(),
+			LogID:          util.GenerateID(),
 			OperatorID:     operatorID,
 			OperatorName:   operatorName,
 			OperationType:  operationType,
@@ -55,10 +54,4 @@ func Audit() gin.HandlerFunc {
 			_ = auditRepo.Create(logEntry)
 		}()
 	}
-}
-
-func generateAuditID() string {
-	b := make([]byte, 4)
-	rand.Read(b)
-	return hex.EncodeToString(b)
 }

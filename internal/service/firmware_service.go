@@ -4,6 +4,7 @@ import (
 	"ccplatform/internal/model"
 	"ccplatform/internal/mqtt"
 	"ccplatform/internal/repository"
+	"ccplatform/pkg/util"
 	"fmt"
 )
 
@@ -23,7 +24,7 @@ func NewFirmwareService(publisher *mqtt.Publisher) *FirmwareService {
 }
 
 func (s *FirmwareService) Create(fw *model.Firmware) error {
-	fw.FirmwareID = generateID()
+	fw.FirmwareID = util.GenerateID()
 	return s.repo.Create(fw)
 }
 

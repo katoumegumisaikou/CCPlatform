@@ -4,6 +4,7 @@ import (
 	"ccplatform/internal/model"
 	"ccplatform/internal/mqtt"
 	"ccplatform/internal/repository"
+	"ccplatform/pkg/util"
 	"fmt"
 	"time"
 )
@@ -50,7 +51,7 @@ func NewRobotService(publisher *mqtt.Publisher) *RobotService {
 
 // Create 创建新机器人记录。
 func (s *RobotService) Create(robot *model.Robot) error {
-	robot.RobotID = generateID()
+	robot.RobotID = util.GenerateID()
 	return s.repo.Create(robot)
 }
 

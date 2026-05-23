@@ -3,6 +3,7 @@ package service
 import (
 	"ccplatform/internal/model"
 	"ccplatform/internal/repository"
+	"ccplatform/pkg/util"
 	"fmt"
 )
 
@@ -18,7 +19,7 @@ func NewDictService() *DictService {
 // --- Dict ---
 
 func (s *DictService) CreateDict(d *model.Dict) error {
-	d.DictID = generateID()
+	d.DictID = util.GenerateID()
 	return s.repo.CreateDict(d)
 }
 
@@ -64,7 +65,7 @@ func (s *DictService) ListDict(page, size int) ([]model.Dict, int64, error) {
 // --- DictItem ---
 
 func (s *DictService) CreateItem(item *model.DictItem) error {
-	item.ItemID = generateID()
+	item.ItemID = util.GenerateID()
 	return s.repo.CreateItem(item)
 }
 

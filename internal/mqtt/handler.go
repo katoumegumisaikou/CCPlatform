@@ -1,9 +1,7 @@
 package mqtt
 
 import (
-	"crypto/rand"
 	"encoding/json"
-	"fmt"
 	"log"
 	"log/slog"
 	"strings"
@@ -17,6 +15,7 @@ import (
 	"ccplatform/internal/model"
 	"ccplatform/internal/repository"
 	"ccplatform/internal/ws"
+	"ccplatform/pkg/util"
 )
 
 // ===== 上行消息结构体（机器人→平台） =====
@@ -252,12 +251,6 @@ func (h *MessageHandler) StoredSysInfo() (storage.SystemInfo, error) {
 	return storage.SystemInfo{}, nil
 }
 
-func generateAlarmID() string {
-	b := make([]byte, 4)
-	rand.Read(b)
-	return fmt.Sprintf("%x", b)
-}
-
 func (h *MessageHandler) handleHeartbeat(robotID string, payload []byte) {
 	var msg HeartbeatPayload
 	if err := json.Unmarshal(payload, &msg); err != nil {
@@ -401,7 +394,7 @@ func (h *MessageHandler) handleAlarm(robotID string, payload []byte) {
 	}
 
 	alarm := &model.Alarm{
-		AlarmID:      generateAlarmID(),
+		AlarmID:      util.GenerateID(),
 		AlarmLevel:   finalLevel,
 		AlarmType:    msg.AlarmType,
 		RobotID:      robotID,

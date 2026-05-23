@@ -3,6 +3,7 @@ package service
 import (
 	"ccplatform/internal/model"
 	"ccplatform/internal/repository"
+	"ccplatform/pkg/util"
 )
 
 // NotifyService 通知模板业务逻辑层。
@@ -15,7 +16,7 @@ func NewNotifyService() *NotifyService {
 }
 
 func (s *NotifyService) Create(tpl *model.NotifyTemplate) error {
-	tpl.TplID = generateID()
+	tpl.TplID = util.GenerateID()
 	return s.repo.Create(tpl)
 }
 

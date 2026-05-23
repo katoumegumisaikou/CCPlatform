@@ -5,8 +5,7 @@ package service
 import (
 	"ccplatform/internal/model"
 	"ccplatform/internal/repository"
-	"crypto/rand"
-	"fmt"
+	"ccplatform/pkg/util"
 )
 
 // StationService 电站业务逻辑层，处理电站的增删改查操作。
@@ -21,16 +20,8 @@ func NewStationService() *StationService {
 
 // Create 创建新电站，自动生成 8 位十六进制 ID。
 func (s *StationService) Create(station *model.Station) error {
-	station.StationID = generateID()
+	station.StationID = util.GenerateID()
 	return s.repo.Create(station)
-}
-
-// generateID 生成 8 位随机十六进制字符串作为业务 ID。
-// 使用 crypto/rand 保证随机性，适用于所有实体的 ID 生成。
-func generateID() string {
-	b := make([]byte, 4)
-	rand.Read(b)
-	return fmt.Sprintf("%x", b)
 }
 
 // GetByID 根据 ID 查询电站详情。

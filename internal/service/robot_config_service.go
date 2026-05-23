@@ -4,6 +4,7 @@ import (
 	"ccplatform/internal/model"
 	"ccplatform/internal/mqtt"
 	"ccplatform/internal/repository"
+	"ccplatform/pkg/util"
 	"fmt"
 )
 
@@ -23,7 +24,7 @@ func NewRobotConfigService() *RobotConfigService {
 }
 
 func (s *RobotConfigService) Create(cfg *model.RobotConfig) error {
-	cfg.ConfigID = generateID()
+	cfg.ConfigID = util.GenerateID()
 	return s.repo.Create(cfg)
 }
 

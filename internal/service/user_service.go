@@ -183,7 +183,7 @@ func (s *UserService) ForgotPassword(username string) (string, error) {
 	resetRepo := repository.NewPasswordResetRepo()
 	reset := &model.PasswordReset{
 		UserID:    user.UserID,
-		Token:     generateID() + generateID(),
+		Token:     util.GenerateID(),
 		ExpiresAt: time.Now().Add(30 * time.Minute),
 	}
 	if err := resetRepo.Create(reset); err != nil {

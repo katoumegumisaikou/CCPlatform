@@ -3,6 +3,7 @@ package service
 import (
 	"ccplatform/internal/model"
 	"ccplatform/internal/repository"
+	"ccplatform/pkg/util"
 )
 
 // CameraService 摄像头管理业务逻辑层。
@@ -15,7 +16,7 @@ func NewCameraService() *CameraService {
 }
 
 func (s *CameraService) Create(cam *model.Camera) error {
-	cam.CameraID = generateID()
+	cam.CameraID = util.GenerateID()
 	return s.repo.Create(cam)
 }
 
