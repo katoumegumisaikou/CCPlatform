@@ -36,6 +36,7 @@ type Hub struct {
 	register   chan *Client
 	unregister chan *Client
 	mu         sync.RWMutex
+	stop       chan struct{}
 }
 
 func NewHub() *Hub {
@@ -44,12 +45,25 @@ func NewHub() *Hub {
 		broadcast:  make(chan []byte, 256),
 		register:   make(chan *Client),
 		unregister: make(chan *Client),
+		stop:       make(chan struct{}),
 	}
 }
 
 func (h *Hub) Run() {
 	for {
 		select {
+		case <-h.stop:
+			// 关闭所有客户端连接
+			h.mu.Lock()
+			for client := range h.clients {
+				close(client.send)
+				client.conn.Close()
+				delete(h.clients, client)
+			}
+			h.mu.Unlock()
+			log.Println("[WS] Hub stopped")
+			return
+
 		case client := <-h.register:
 			h.mu.Lock()
 			h.clients[client] = true
@@ -78,6 +92,11 @@ func (h *Hub) Run() {
 			h.mu.RUnlock()
 		}
 	}
+}
+
+// Stop 关闭 Hub，断开所有 WebSocket 连接并退出 Run 循环。
+func (h *Hub) Stop() {
+	close(h.stop)
 }
 
 func (h *Hub) BroadcastToAll(msg Message) {

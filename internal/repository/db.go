@@ -67,3 +67,15 @@ func InitDB() error {
 
 	return nil
 }
+
+// CloseDB 关闭数据库连接池，应在优雅关闭阶段调用。
+func CloseDB() error {
+	if DB != nil {
+		sqlDB, err := DB.DB()
+		if err != nil {
+			return err
+		}
+		return sqlDB.Close()
+	}
+	return nil
+}

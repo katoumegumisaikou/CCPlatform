@@ -7,10 +7,12 @@ import (
 
 // MonitorService 监控中心业务逻辑层，聚合多维度数据供仪表盘和实时监控使用。
 type MonitorService struct {
-	stationRepo *repository.StationRepo
-	robotRepo   *repository.RobotRepo
-	taskRepo    *repository.TaskRepo
-	alarmRepo   *repository.AlarmRepo
+	stationRepo   *repository.StationRepo
+	robotRepo     *repository.RobotRepo
+	taskRepo      *repository.TaskRepo
+	alarmRepo     *repository.AlarmRepo
+	posHistRepo   *repository.RobotPositionRepo
+	envDataRepo   *repository.EnvironmentDataRepo
 }
 
 // NewMonitorService 创建 MonitorService 实例，注入所有需要的 Repo。
@@ -20,6 +22,8 @@ func NewMonitorService() *MonitorService {
 		robotRepo:   repository.NewRobotRepo(),
 		taskRepo:    repository.NewTaskRepo(),
 		alarmRepo:   repository.NewAlarmRepo(),
+		posHistRepo: repository.NewRobotPositionRepo(),
+		envDataRepo: repository.NewEnvironmentDataRepo(),
 	}
 }
 
@@ -149,5 +153,10 @@ func (s *MonitorService) GetRealtimeData(stationID string) (*StationRealtime, er
 
 // GetPositionHistory 查询机器人历史轨迹，支持机器人 ID 和时间段筛选。
 func (s *MonitorService) GetPositionHistory(robotID, startTime, endTime string, limit int) ([]model.RobotPosition, error) {
-	return s.robotRepo.GetPositionHistory(robotID, startTime, endTime, limit)
+	return s.posHistRepo.GetByRobotID(robotID, startTime, endTime, limit)
+}
+
+// GetEnvironmentHistory 查询环境数据历史，支持机器人 ID 和时间段筛选。
+func (s *MonitorService) GetEnvironmentHistory(robotID, startTime, endTime string) ([]model.EnvironmentData, error) {
+	return s.envDataRepo.GetByRobotID(robotID, startTime, endTime)
 }

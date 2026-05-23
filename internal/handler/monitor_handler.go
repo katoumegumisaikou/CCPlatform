@@ -68,8 +68,7 @@ func (h *MonitorHandler) GetEnvironmentHistory(c *gin.Context) {
 	startTime := c.Query("start_time")
 	endTime := c.Query("end_time")
 
-	robotRepo := repository.NewRobotRepo()
-	envData, err := robotRepo.GetEnvironmentHistory(robotID, startTime, endTime)
+	envData, err := h.svc.GetEnvironmentHistory(robotID, startTime, endTime)
 	if err != nil {
 		response.Error(c, errcode.ErrInternal)
 		return

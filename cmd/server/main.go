@@ -7,11 +7,15 @@
 //  4. 启动 WebSocket Hub（实时推送服务）
 //  5. 启动 MQTT Broker（嵌入式，接收机器人上行数据）
 //  6. 注册 MQTT 消息处理器（解析心跳/位置/状态/告警）
-//  7. 启动 HTTP Server（Gin REST API）
-//  8. 等待信号优雅关闭
+//  7. 创建 MQTT Publisher，用于下发控制指令到机器人
+//  8. 启动周期任务调度器，用于定时/周期清扫任务
+//  9. 注册所有 HTTP 路由（REST API）
+// 10. 启动 HTTP Server
+// 11. 等待信号，按序优雅关闭：HTTP → WebSocket → Scheduler → MQTT → DB
 package main
 
 import (
+	"context"
 	"ccplatform/internal/config"
 	"ccplatform/internal/mqtt"
 	"ccplatform/internal/repository"
@@ -108,13 +112,47 @@ func main() {
 
 	log.Println("Shutting down server...")
 
-	taskScheduler.Stop()
-	if mqtt.Server != nil {
-		mqtt.Server.Close()
-		log.Println("[MQTT] Broker stopped")
-	}
+	// 关闭顺序：HTTP → WebSocket → Scheduler → MQTT → DB
+	// 超时 10 秒，超时后强制退出防止挂死
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
 
-	log.Println("Server exited")
+		// 1. 停止 HTTP Server，不再接受新请求，等待进行中请求完成
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := srv.Shutdown(ctx); err != nil {
+			log.Printf("[HTTP] Shutdown error: %v", err)
+		} else {
+			log.Println("[HTTP] Server stopped")
+		}
+
+		// 2. 断开所有 WebSocket 连接
+		hub.Stop()
+
+		// 3. 停止任务调度器（不再触发新任务）
+		taskScheduler.Stop()
+
+		// 4. 关闭 MQTT Broker（断开所有机器人连接）
+		if mqtt.Server != nil {
+			mqtt.Server.Close()
+			log.Println("[MQTT] Broker stopped")
+		}
+
+		// 5. 关闭数据库连接池
+		if err := repository.CloseDB(); err != nil {
+			log.Printf("[DB] Close error: %v", err)
+		} else {
+			log.Println("[DB] Connection pool closed")
+		}
+	}()
+
+	select {
+	case <-done:
+		log.Println("Server exited")
+	case <-time.After(10 * time.Second):
+		log.Println("Shutdown timeout, forcing exit")
+	}
 }
 
 // initDB 初始化数据库连接并自动迁移表结构，由 repository.InitDB 统一处理。

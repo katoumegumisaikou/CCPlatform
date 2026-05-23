@@ -132,43 +132,6 @@ func (r *RobotRepo) CountByStatus() (map[string]int64, error) {
 	return result, nil
 }
 
-// GetPositionHistory 查询机器人位置历史，用于轨迹回放。
-func (r *RobotRepo) GetPositionHistory(robotID, startTime, endTime string, limit int) ([]model.RobotPosition, error) {
-	var positions []model.RobotPosition
-	query := r.db.Model(&model.RobotPosition{})
-	if robotID != "" {
-		query = query.Where("robot_id = ?", robotID)
-	}
-	if startTime != "" {
-		query = query.Where("timestamp >= ?", startTime)
-	}
-	if endTime != "" {
-		query = query.Where("timestamp <= ?", endTime)
-	}
-	if limit <= 0 {
-		limit = 1000
-	}
-	err := query.Order("timestamp ASC").Limit(limit).Find(&positions).Error
-	return positions, err
-}
-
-// GetEnvironmentHistory 查询环境数据历史。
-func (r *RobotRepo) GetEnvironmentHistory(robotID, startTime, endTime string) ([]model.EnvironmentData, error) {
-	var data []model.EnvironmentData
-	query := r.db.Model(&model.EnvironmentData{})
-	if robotID != "" {
-		query = query.Where("robot_id = ?", robotID)
-	}
-	if startTime != "" {
-		query = query.Where("record_time >= ?", startTime)
-	}
-	if endTime != "" {
-		query = query.Where("record_time <= ?", endTime)
-	}
-	err := query.Order("record_time ASC").Limit(1000).Find(&data).Error
-	return data, err
-}
-
 // GetOnlineRobots 查询所有在线机器人，用于监控面板和实时数据推送。
 func (r *RobotRepo) GetOnlineRobots() ([]model.Robot, error) {
 	var robots []model.Robot
