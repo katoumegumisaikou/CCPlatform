@@ -82,8 +82,7 @@ export default function PredictionsPage() {
     setLoading(true);
     try {
       const res = await analyticsApi.predictions.efficiency(params);
-      const data = (res as any)?.data ?? res;
-      const list: EfficiencyPredictionItem[] = Array.isArray(data) ? data : (data?.list || []);
+      const list: EfficiencyPredictionItem[] = Array.isArray(res) ? res : ((res as Record<string, unknown>)?.list as EfficiencyPredictionItem[] || []);
       if (list.length === 0) {
         setHasEfficiencyData(false);
         return;
@@ -140,8 +139,7 @@ export default function PredictionsPage() {
     setFaultLoading(true);
     try {
       const res = await analyticsApi.predictions.fault(params);
-      const data = (res as any)?.data ?? res;
-      const list: FaultPredictionItem[] = Array.isArray(data) ? data : (data?.list || []);
+      const list: FaultPredictionItem[] = Array.isArray(res) ? res : ((res as Record<string, unknown>)?.list as FaultPredictionItem[] || []);
       setFaultList(list);
     } catch {
       message.error('获取故障预测失败');
@@ -155,8 +153,7 @@ export default function PredictionsPage() {
     setStrategyLoading(true);
     try {
       const res = await analyticsApi.predictions.strategy(params);
-      const data = (res as any)?.data ?? res;
-      const list: StrategyItem[] = Array.isArray(data) ? data : (data?.list || []);
+      const list: StrategyItem[] = Array.isArray(res) ? res : ((res as Record<string, unknown>)?.list as StrategyItem[] || []);
       setStrategyList(list);
     } catch {
       message.error('获取策略优化失败');

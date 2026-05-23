@@ -136,7 +136,7 @@ export default function StationsPage() {
     },
     {
       title: '地址',
-      dataIndex: 'address',
+      dataIndex: 'location',
       key: 'address',
       ellipsis: true,
     },

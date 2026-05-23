@@ -81,8 +81,7 @@ export default function AnalyticsPage() {
       switch (activeTab) {
         case 'economic': {
           const res = await analyticsApi.economic(params);
-          const data = (res as any)?.data ?? res;
-          const list = Array.isArray(data) ? data : (data?.list || []);
+          const list = Array.isArray(res) ? res : ((res as Record<string, unknown>)?.list as unknown[] || []);
           if (list.length === 0) {
             setHasData(false);
             break;
@@ -116,8 +115,7 @@ export default function AnalyticsPage() {
         }
         case 'efficiency': {
           const res = await analyticsApi.efficiency(params);
-          const data = (res as any)?.data ?? res;
-          const list = Array.isArray(data) ? data : (data?.list || []);
+          const list = Array.isArray(res) ? res : ((res as Record<string, unknown>)?.list as unknown[] || []);
           if (list.length === 0) {
             setHasData(false);
             break;
@@ -167,8 +165,7 @@ export default function AnalyticsPage() {
         }
         case 'runtime': {
           const res = await analyticsApi.reports(params);
-          const data = (res as any)?.data ?? res;
-          const list = Array.isArray(data) ? data : (data?.list || []);
+          const list = Array.isArray(res) ? res : ((res as Record<string, unknown>)?.list as unknown[] || []);
           if (list.length === 0) {
             setHasData(false);
             break;
@@ -193,8 +190,7 @@ export default function AnalyticsPage() {
         }
         case 'compare': {
           const res = await analyticsApi.compare(params);
-          const data = (res as any)?.data ?? res;
-          const list = Array.isArray(data) ? data : (data?.list || []);
+          const list = Array.isArray(res) ? res : ((res as Record<string, unknown>)?.list as unknown[] || []);
           if (list.length === 0) {
             setHasData(false);
             break;
@@ -221,8 +217,7 @@ export default function AnalyticsPage() {
         }
         case 'timeseries': {
           const res = await analyticsApi.timeseries(params);
-          const data = (res as any)?.data ?? res;
-          const list = Array.isArray(data) ? data : (data?.list || []);
+          const list = Array.isArray(res) ? res : ((res as Record<string, unknown>)?.list as unknown[] || []);
           if (list.length === 0) {
             setHasData(false);
             break;

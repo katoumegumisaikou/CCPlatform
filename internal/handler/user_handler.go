@@ -6,9 +6,11 @@ import (
 	"ccplatform/internal/service"
 	"ccplatform/pkg/errcode"
 	"ccplatform/pkg/response"
+	"errors"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 // UserHandler 用户与角色 HTTP 处理器，处理认证、用户管理和角色管理。
@@ -100,7 +102,11 @@ func (h *UserHandler) Create(c *gin.Context) {
 		Status:     1,
 	}
 	if err := h.svc.Create(user, req.Password); err != nil {
-		response.Error(c, errcode.ErrDuplicate)
+		if errors.Is(err, gorm.ErrDuplicatedKey) {
+			response.Error(c, errcode.ErrDuplicate)
+		} else {
+			response.Error(c, errcode.ErrInternal)
+		}
 		return
 	}
 	response.OK(c, user)

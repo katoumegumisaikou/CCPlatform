@@ -5,9 +5,11 @@ import (
 	"ccplatform/internal/service"
 	"ccplatform/pkg/errcode"
 	"ccplatform/pkg/response"
+	"errors"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 // StationHandler 电站 HTTP 处理器，处理电站相关的 RESTful API 请求。
@@ -90,7 +92,11 @@ func (h *StationHandler) Create(c *gin.Context) {
 		Status:      1,
 	}
 	if err := h.svc.Create(station); err != nil {
-		response.Error(c, errcode.ErrDuplicate)
+		if errors.Is(err, gorm.ErrDuplicatedKey) {
+			response.Error(c, errcode.ErrDuplicate)
+		} else {
+			response.Error(c, errcode.ErrInternal)
+		}
 		return
 	}
 	response.OK(c, station)

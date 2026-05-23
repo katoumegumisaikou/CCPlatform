@@ -6,9 +6,11 @@ import (
 	"ccplatform/internal/service"
 	"ccplatform/pkg/errcode"
 	"ccplatform/pkg/response"
+	"errors"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 // RobotHandler 机器人 HTTP 处理器，处理机器人相关的 RESTful API 请求。
@@ -121,7 +123,11 @@ func (h *RobotHandler) Create(c *gin.Context) {
 		StationID: req.StationID,
 	}
 	if err := h.svc.Create(robot); err != nil {
-		response.Error(c, errcode.ErrDuplicate)
+		if errors.Is(err, gorm.ErrDuplicatedKey) {
+			response.Error(c, errcode.ErrDuplicate)
+		} else {
+			response.Error(c, errcode.ErrInternal)
+		}
 		return
 	}
 	response.OK(c, robot)

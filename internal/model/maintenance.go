@@ -12,7 +12,7 @@ type Maintenance struct {
 	Handler       string    `gorm:"type:varchar(50)" json:"handler"`        // 处理人
 	FaultDesc     string    `gorm:"type:varchar(500)" json:"fault_desc"`    // 故障描述
 	PartsReplaced string    `gorm:"type:varchar(500)" json:"parts_replaced"` // 更换配件
-	MaintTime     time.Time `gorm:"type:datetime" json:"maint_time"`        // 维护时间
+	MaintTime     *time.Time `gorm:"type:datetime" json:"maint_time"`        // 维护时间
 	NextMaintTime *time.Time `gorm:"type:datetime" json:"next_maint_time"`  // 下次维护时间（用于提醒）
 	CreateTime    time.Time `gorm:"autoCreateTime" json:"create_time"`
 	UpdateTime    time.Time `gorm:"autoUpdateTime" json:"update_time"`

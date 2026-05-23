@@ -95,7 +95,7 @@ export interface Robot {
   humidity: number;
   light_intensity: number;
   wind_speed: number;
-  last_heartbeat: string;
+  last_heartbeat: string | null;
   create_time: string;
 }
 

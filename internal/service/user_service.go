@@ -77,7 +77,8 @@ func (s *UserService) Login(username, password, ip string) (string, error) {
 		return "", fmt.Errorf("invalid password")
 	}
 	// 更新最后登录时间
-	user.LastLogin = time.Now()
+	now := time.Now()
+	user.LastLogin = &now
 	s.repo.Update(user)
 
 	// 记录登录成功日志

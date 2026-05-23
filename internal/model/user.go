@@ -15,7 +15,7 @@ type User struct {
 	RoleID       string    `gorm:"type:varchar(32);index" json:"role_id"`           // 角色 ID（关联 roles 表）
 	StationIDs   string    `gorm:"type:varchar(500)" json:"station_ids"`            // 授权电站 ID 列表（逗号分隔）
 	Status       int8      `gorm:"type:tinyint;default:1" json:"status"`            // 状态: 0禁用 1启用
-	LastLogin    time.Time `gorm:"type:datetime" json:"last_login"`                 // 最后登录时间
+	LastLogin    *time.Time `gorm:"type:datetime" json:"last_login"`                 // 最后登录时间
 	CreateTime   time.Time `gorm:"autoCreateTime" json:"create_time"`               // 创建时间
 	UpdateTime   time.Time `gorm:"autoUpdateTime" json:"update_time"`               // 更新时间
 }

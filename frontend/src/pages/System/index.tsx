@@ -193,11 +193,15 @@ function UsersTab() {
   const handleOk = async () => {
     try {
       const values = await form.validateFields();
+      const payload = {
+        ...values,
+        status: values.status ? 1 : 0,
+      };
       if (editingUser) {
-        await userApi.update(editingUser.user_id, values);
+        await userApi.update(editingUser.user_id, payload);
         message.success('用户更新成功');
       } else {
-        await userApi.create(values);
+        await userApi.create(payload);
         message.success('用户创建成功');
       }
       setModalOpen(false);

@@ -25,7 +25,7 @@ type Robot struct {
 	Humidity       float64   `gorm:"type:decimal(5,2)" json:"humidity"`                        // 环境湿度 (%)
 	LightIntensity float64   `gorm:"type:decimal(10,2)" json:"light_intensity"`                // 光照强度 (lux)
 	WindSpeed      float64   `gorm:"type:decimal(5,2)" json:"wind_speed"`                      // 风速 (m/s)
-	LastHeartbeat  time.Time `gorm:"type:datetime" json:"last_heartbeat"`                      // 最后心跳时间，用于判断在线状态
+	LastHeartbeat  *time.Time `gorm:"type:datetime" json:"last_heartbeat"`                     // 最后心跳时间，用于判断在线状态
 	CreateTime     time.Time `gorm:"autoCreateTime" json:"create_time"`                        // 注册时间
 	UpdateTime     time.Time `gorm:"autoUpdateTime" json:"update_time"`                        // 最后更新时间
 }

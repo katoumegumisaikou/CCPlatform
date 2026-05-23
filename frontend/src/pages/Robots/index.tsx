@@ -135,8 +135,8 @@ export default function RobotsPage() {
   // 控制命令映射
   const COMMANDS: { key: string; label: string; icon: React.ReactNode; cmd: string }[] = [
     { key: 'start', label: '启动', icon: <PlayCircleOutlined />, cmd: 'start' },
-    { key: 'pause', label: '停止', icon: <PauseCircleOutlined />, cmd: 'pause' },
-    { key: 'home', label: '回仓', icon: <HomeOutlined />, cmd: 'home' },
+    { key: 'stop', label: '停止', icon: <PauseCircleOutlined />, cmd: 'stop' },
+    { key: 'return', label: '回仓', icon: <HomeOutlined />, cmd: 'return' },
     { key: 'reset', label: '复位', icon: <UndoOutlined />, cmd: 'reset' },
   ];
 

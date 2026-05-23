@@ -1,144 +1,402 @@
-# TODO
+# 前后端 REST API 数据交互验证
 
-## 监控中心模块 — Redis 缓存层重构
+> 仅验证 REST API 请求/响应，不含 MQTT/WebSocket。按模块逐一验证：前端 types → api 调用 → 表单字段名 → 后端 handler request struct 的 json tag 对齐。
 
-### 当前问题
+## 验证方法
 
-1. **实时数据走 MySQL 读写**：MQTT handler 收到位置(1Hz)、心跳(5s)、状态(10s) 后直接写 robot 表，GetRealtimeData HTTP 接口再查 robot 表。高频覆盖写入没有持久化意义（历史轨迹已单独写入 robot_positions 表），实时读库浪费数据库资源。
-2. **需求文档写了 Redis 但没实现**：需求规格说明书 2.1.3 明确写了缓存数据库 Redis，实际项目完全没有。
-3. **WebSocket 全量广播**：MQTT handler 全部使用 BroadcastToAll，Hub 已有 BroadcastToStation 方法但未被调用，所有客户端收到全量数据。
-
-### 改进方案
-
-引入 Redis 作为实时数据中间层，切断 MQTT → MySQL 的直接高频写入链路：
-
-```
-机器人 --MQTT--> handler.go
-                  ├── 写 Redis 快照 (robot:heartbeat:{id} / robot:realtime:{id} /
-                  robot:status:{id})
-
-                  ├── WebSocket 推送到对应电站客户端 (BroadcastToStation)
-                  ├── 位置历史 → robot_positions 表 (保留)
-                  └── 心跳 → 每 10s 最多写一次 MySQL last_heartbeat
-
-前端首次加载 → HTTP API → 读 Redis 快照 → 返回
-                                       └── Redis 不可用 → 降级查 MySQL
-后续更新 → WebSocket 增量推送
-```
-
-### Redis Key 设计
-
-| Key | 类型 | 字段 | TTL |
-|-----|------|------|-----|
-| `robot:heartbeat:{id}` | Hash | online_status, battery_level, work_status, last_heartbeat | 30s（过期=离线） |
-| `robot:realtime:{id}` | Hash | pos_x, pos_y, pos_z, heading, speed | 15s（过期=位置陈旧） |
-| `robot:status:{id}` | Hash | work_status, speed, clean_area, fault_code, temperature, humidity, light_intensity, wind_speed | 30s（过期=状态陈旧） |
-| `robot:heartbeat_write:{id}` | Hash | last_write_ts | 60s（心跳写 MySQL 去重） |
-
-### 改造计划
-
-- [ ] 添加 Redis 依赖和配置（go-redis/v9, config/config.yaml, internal/config/config.go）
-- [ ] 新增 internal/cache/robot_state.go（Redis 客户端封装，三张 Hash 的存取方法）
-- [ ] 改造 MQTT handler：position/status/heartbeat 写 Redis 快照而非 MySQL robot 表，BroadcastToAll 改为 BroadcastToStation
-- [ ] 心跳降频写 MySQL：每 10s 最多写一次 last_heartbeat，通过 Redis 标记 key 去重
-- [ ] 改造 monitor_service.GetRealtimeData：从 Redis 读快照，Redis 不可用时降级查 MySQL
-- [ ] 改造 WebSocket 推送：按电站过滤（BroadcastToStation），不再全量广播
+每个模块验证 4 步：
+1. `types/index.ts` 类型定义 ↔ 后端 model 字段 (json tag)
+2. `api/{模块}.ts` HTTP method + URL + params ↔ 后端 router 注册
+3. `pages/{模块}/index.tsx` 表单 name/dataIndex ↔ 后端 request struct json tag
+4. 实际调接口，打开浏览器 DevTools Network 面板，检查 request payload 和 response
 
 ---
 
-## 前端开发规划
+## 0. API 响应解包基线（验证前必读）
 
-### 1. 项目背景
+```
+axios interceptor (client.ts) 行为：
+  后端返回 {code:0, data:X, message:"success"}
+  → interceptor 返回 X（即 response.data.data）
+  → 所有页面代码拿到的是 X，不是完整响应体
 
-CCPlatform 是光伏清扫机器人云控平台后端，已实现 20+ 功能模块、60+ REST API、MQTT 上行数据处理、WebSocket 实时推送。当前仅有 Go 后端，需要从零构建前端。
+三类接口的解包结果：
+  分页接口 (list/total/page/size)  → X = {list:[...], total:N}
+  数组接口 (/stations/all, /roles)  → X = [...]
+  单对象接口 (GET /:id, POST/PUT)   → X = {...}
 
-### 2. 后端已具备的能力（前端需对接）
+关键检查：所有页面代码不得再访问 .data 属性（之前 System 页面修过一批）
+```
 
-**REST API 体系**（13 个路由组，详见 README.md）：
-- 认证：JWT 登录、图形验证码、短信验证码、忘记/重置密码
-- 电站管理：CRUD + 下属机器人查询 + 实时数据
-- 机器人管理：CRUD + 控制指令下发 + 高级统计 + 配置应用
-- 任务管理：CRUD + 状态流转（状态机校验）+ 智能调度 + 进度跟踪
-- 告警管理：告警列表/处理/统计/趋势 + 告警规则配置
-- 监控中心：Dashboard 概览 + 轨迹历史 + 环境数据 + GIS 配置
-- 数据分析：经济/效率/运行/对比/时序/导出 6 类报表
-- 智能预测：效率预测 + 故障预测 + 策略优化
-- 用户/角色/组织：CRUD + 组织架构树
-- 系统配置 + 数据字典（类型+字典项）
-- 固件管理：版本管理 + OTA 升级下发
-- 维护保养：任务管理 + 提醒
-- 摄像头管理：录摄像头 + 流地址（RTSP/HLS）
-- 通知模板 + 报告模板 + 备份恢复
-- 审计日志 + 登录日志
+---
 
-**WebSocket 实时推送**（`/ws?station_id=xxx`）：
-- `heartbeat`：在线状态、电量、工作状态（5s 间隔）
-- `position`：三维坐标、朝向（1s 间隔）
-- `status`：速度、清扫面积、故障码、温湿度/光照/风速（10s 间隔）
-- `alarm`：告警实时通知
+## 1. 登录 & 认证
 
-**RBAC 权限体系**：13 个权限标识，5 种角色（系统管理员/电站管理员/运维工程师/监控值班员/普通用户）
+```
+文件：Login/index.tsx, api/auth.ts, types/index.ts
+后端：user_handler.go LoginRequest/VerifyCaptchaRequest
 
-**响应格式**：
-- 成功：`{"code":0, "data":..., "message":"ok"}`
-- 分页：`{"code":0, "data":{"list":[...], "total":100}, "message":"ok"}`
-- 错误：`{"code":10001, "message":"error description"}`
+验证项：
+- [ ] 登录 form: username, password 字段名 √（已验证）
+- [ ] 验证码: captcha_id, answer 字段名匹配 VerifyCaptchaRequest
+- [ ] token 存储 key "token" vs getToken() 读取一致
+- [ ] code=10001/HTTP 401 → 清除 token + 跳转 /login
+- [ ] GET /auth/me 返回 User 字段 vs types/index.ts User 接口
+- [ ] authStore 权限列表来自 role.permissions 字段
+```
 
-### 3. 核心页面清单
+## 2. 电站管理 — Stations
 
-| 页面 | 路由 | 关键要求 |
-|------|------|---------|
-| 登录页 | `/login` | JWT 登录、图形验证码、记住密码 |
-| 首页仪表盘 | `/dashboard` | 电站/机器人/任务/告警统计卡片、清扫面积趋势图、机器人状态分布饼图、实时在线率/出仓率 |
-| **监控中心** | `/monitor` | **核心页面**：左 GIS 地图 + 右信息面板。地图展示电站位置、光伏板阵列、机器人实时位置（WebSocket 驱动）；支持卫星/矢量切换、3D/2D 切换、缩放测距；点击机器人显示详情卡片（基本信息+实时位置+运行数据+环境参数+远程控制按钮）；支持轨迹回放 |
-| 电站管理 | `/stations` | 表格+分页+搜索、新建/编辑弹窗、电站下机器人列表 |
-| 机器人管理 | `/robots` | 表格（按电站/类型/在线状态筛选）、详情页（基本信息+实时数据+控制面板）、指令下发（start/stop/return/reset） |
-| 任务管理 | `/tasks` | 表格（按电站/机器人/状态筛选）、创建任务表单（选机器人+定时/手动/周期）、智能调度一键创建、进度条展示 |
-| 告警中心 | `/alarms` | 告警列表（按级别/状态筛选）、处理操作（确认/处理/忽略）、告警规则配置（作用域+抑制+升级）、趋势图表 |
-| 数据分析 | `/analytics` | 经济效益/效率分析/运行统计/对比分析/时序分析 5 个子页，图表+表格+导出按钮 |
-| 智能预测 | `/predictions` | 效率预测曲线、故障预测列表、策略优化建议 |
-| 固件管理 | `/firmwares` | 固件列表+上传、OTA 升级任务下发、升级进度跟踪 |
-| 维护保养 | `/maintenance` | 维护任务表格、保养提醒列表 |
-| 摄像头管理 | `/cameras` | 摄像头列表、添加/编辑（含流地址 RTSP/HLS 输入） |
-| 系统管理 | `/system` | 用户管理、角色管理、组织架构树、系统配置、数据字典、审计日志、登录日志、通知模板、报告模板、备份恢复 |
-| 个人中心 | `/profile` | 修改密码、个人信息 |
+```
+文件：Stations/index.tsx, api/stations.ts, types/index.ts Station
+后端：station_handler.go CreateStationRequest/UpdateStationRequest
 
-### 4. 关键技术难点
+REST 对齐：
+  GET    /stations       → stationApi.list(params)       → 分页列表
+  POST   /stations       → stationApi.create(data)       → 创建
+  GET    /stations/all   → stationApi.getAll()           → 全部电站(数组)
+  GET    /stations/:id   → stationApi.getById(id)        → 单个电站
+  PUT    /stations/:id   → stationApi.update(id, data)   → 更新
+  DELETE /stations/:id   → stationApi.delete(id)         → 删除
+  GET    /stations/:id/robots → stationApi.getRobots(id) → 电站下属机器人
 
-1. **GIS 地图**：需要集成地图 SDK（Leaflet/高德/百度/Mapbox），实现：
-   - 电站标记点 + 光伏板阵列多边形覆盖物
-   - 机器人实时位置图标（WebSocket 驱动，1Hz 刷新）
-   - 地图图层切换（卫星图/矢量图）、3D 视角（Cesium.js 或 Mapbox GL JS）
-   - 轨迹回放（播放历史位置点，支持倍速和拖拽）
+表单字段 vs CreateStationRequest(json tag)：
+  station_name √, station_code √, location √, capacity √
+  longitude √ (InputNumber 无 stringMode，发 number), latitude √
+  panel_area √, panel_count √
 
-2. **实时数据**：WebSocket 连接管理 + 心跳检测 + 断线重连 + 按 station_id 过滤订阅
+⚠ BUG：表格列 dataIndex: 'address' → 应为 'location'（第139行）
+  后端返回字段是 location，Station 类型定义也是 location，address 列始终为空
 
-3. **视频监控**：浏览器无法直接播放 RTSP，需要：
-   - 方案 A：后端转码 RTSP → WebRTC/HLS/FLV（需新增后端视频流代理服务）
-   - 方案 B：摄像头本身支持 HLS/WebRTC 输出
-   - 前端集成播放器（flv.js / video.js / Jessibuca）
+筛选参数：station_name 作为 query param → GET /stations?station_name=xxx
+- [ ] 确认后端支持 station_name 过滤
+```
 
-4. **大数据量表格**：机器人位置历史、审计日志等表可能有海量数据，需要虚拟滚动
+## 3. 机器人管理 — Robots
 
-5. **权限控制**：前端路由守卫 + 按钮级权限（基于 RBAC 权限标识）
+```
+文件：Robots/index.tsx, api/robots.ts, types/index.ts Robot
+后端：robot_handler.go CreateRobotRequest/UpdateRobotRequest/SendCommandRequest
 
-6. **任务下发流程缺失**：当前任务创建只写 MySQL，未通过 MQTT 下发给机器人。前端需知晓此限制，创建任务后需额外调用 `POST /robots/:id/cmd` 发 start 指令
+REST 对齐：
+  GET    /robots              → robotApi.list(params)           → 分页
+  POST   /robots              → robotApi.create(data)            → 创建
+  GET    /robots/stats        → robotApi.stats()                 → 统计
+  GET    /robots/:id          → robotApi.getById(id)             → 详情
+  PUT    /robots/:id          → robotApi.update(id, data)        → 更新
+  DELETE /robots/:id          → robotApi.delete(id)              → 删除
+  POST   /robots/:id/cmd      → robotApi.sendCommand(id,cmd)     → 指令
+  GET    /robots/:id/advanced-stats → robotApi.advancedStats(id) → 高级统计
+  POST   /robots/:id/config/apply   → robotApi.applyConfig(id,configId) → 配置
 
-### 5. 请你规划以下内容
+表单 vs CreateRobotRequest：
+  robot_code √, robot_name √, robot_type √ (Select value=Number), station_id √
 
-请基于以上信息，为 CCPlatform 前端项目输出一份完整的编码规划，包含：
+指令下发 vs SendCommandRequest：
+  robotApi.sendCommand(id, cmd, params) → body: { cmd, params } √
 
-1. **技术选型**：框架（React/Vue/Angular？）、UI 组件库、GIS 地图库、图表库、视频播放方案、状态管理、构建工具，并说明选型理由
-2. **项目目录结构**：pages/components/hooks/services/store/utils 等如何组织
-3. **路由设计**：完整路由表（路径+权限守卫+懒加载）
-4. **组件树设计**：全局布局（侧边栏+顶栏+内容区）、核心页面（监控中心为主）的组件拆分
-5. **数据流设计**：API 请求封装（axios/fetch 拦截器+JWT 注入）、WebSocket 连接管理（单例+自动重连+消息分发）、状态管理（全局状态 vs 页面状态）
-6. **开发阶段划分**：建议按什么顺序开发（如 Phase1 登录+布局+仪表盘 → Phase2 监控中心 → Phase3 业务 CRUD → Phase4 数据分析 → Phase5 系统管理 → Phase6 高级功能）
-7. **关键技术难点的实现方案**（GIS 地图、视频监控、实时数据推送、大数据量表等）
-8. **与后端的对接约定**：API base URL 配置、请求/响应类型定义、错误码处理、WebSocket 消息类型定义
+筛选参数：station_id, robot_type, online_status → 后端支持
+```
 
-注意：
-- 本平台用于光伏电站运维管理，用户以 PC Web 管理端为主，可兼顾大屏展示
-- 监控中心是核心差异化页面，需重点设计
-- 摄像头 RTSP 流播放是已知技术难点，请给出可行方案（含后端需配合的部分）
-- 建议在项目根目录新建 `frontend/` 目录，与现有 Go 后端代码隔离
+## 4. 任务管理 — Tasks
+
+```
+文件：Tasks/index.tsx, api/tasks.ts, types/index.ts Task
+后端：task_handler.go CreateTaskRequest/UpdateTaskStatusRequest/SmartScheduleRequest
+
+REST 对齐：
+  GET    /tasks              → taskApi.list(params)          → 分页
+  POST   /tasks              → taskApi.create(data)          → 创建
+  GET    /tasks/:id          → taskApi.getById(id)           → 详情
+  PUT    /tasks/:id/status   → taskApi.updateStatus(id,status) → 状态更新
+  DELETE /tasks/:id          → taskApi.delete(id)            → 删除
+  GET    /tasks/:id/progress → taskApi.getProgress(id)       → 进度
+  POST   /tasks/smart-schedule → taskApi.smartSchedule(stationId) → 智能排程
+
+表单 vs CreateTaskRequest：
+  task_name √, task_type √, robot_id √, area_ids √
+  plan_start √ (dayjs → "YYYY-MM-DD HH:mm:ss" 字符串), plan_end √
+  cron_expr √
+  task_type=2 → plan_start/plan_end 必填 √
+  task_type=3 → cron_expr 必填 √
+
+状态更新 vs UpdateTaskStatusRequest(body: {status})：
+  taskApi.updateStatus(id, status) → 发送 {status} √
+
+智能排程 vs SmartScheduleRequest(body: {station_id}) √
+
+状态机逻辑对照：待执行0→启动1, 执行中1→暂停3/完成2, 已暂停3→恢复1/完成2
+- [ ] 前端按钮展示规则与后端 TaskService 状态机一致
+```
+
+## 5. 仪表盘 — Dashboard
+
+```
+文件：Dashboard/index.tsx, api/monitor.ts monitorApi.getDashboard()
+后端：GET /monitor/overview → Monitor.GetDashboard
+
+返回字段对照（DashboardOverview）：
+  station_count √, today_clean_area √, running_tasks √, unhandled_alarms √
+  robot_stats: 后端返回 {"online":0,"offline":0,"fault":0,"total":0} (字符串 key)
+    - 统计卡片取值 data?.robot_stats?.['1'] ?? data?.robot_stats?.online
+      数字 key '1'=undefined → fallback 'online' 能拿到值，但所有状态都映射成"在线"
+    - 实际应统一用字符串 key 或改取 total 字段
+  alarm_stats: 后端返回 {"total":0} 或其他 key
+
+- [ ] robot_stats 统计卡片：当前只显示"在线"数量正确吗？
+- [ ] 清扫面积趋势图是 mock 数据，后续替换为 GET /analytics/timeseries
+
+---
+
+## 已验证 & 已修复
+
+| # | 文件 | 行 | 问题 | 状态 |
+|---|------|----|------|------|
+| 1 | Stations/index.tsx | 139 | `dataIndex: 'address'` vs 后端字段 `location` 不匹配 | ✅ 已修复 |
+| 2 | Analytics/index.tsx | 84,119,170,196,224 | `(res as any)?.data ?? res` API 已解包但再次 .data | ✅ 已修复 — 直接使用 res |
+| 3 | Stations (上一轮) | form | longitude/latitude stringMode, address→location, 缺panel_area/panel_count | ✅ 已修复 |
+| 4 | System (上一轮) | 163,567,1259,1359 | roles/orgs .data 访问, Tree onSelect 类型, 审计/登录日志 .data | ✅ 已修复 |
+| 5 | useWebSocket (上一轮) | 10 | useRef 泛型缺初始值 | ✅ 已修复 |
+| 6 | Monitor (上一轮) | Divider | orientation="start" 非 antd v6 合法 prop | ✅ 已修复 |
+```
+
+## 6. 告警中心 — Alarms
+
+```
+文件：Alarms/index.tsx, api/alarms.ts, types/index.ts Alarm/AlarmRule
+后端：alarm_handler.go HandleAlarmRequest，alarm_rule_handler.go (绑 model.AlarmRule)
+
+告警记录：
+  GET    /alarms         → alarmApi.list(params)           → 分页
+  GET    /alarms/:id     → alarmApi.getById(id)            → 详情
+  PUT    /alarms/:id     → alarmApi.handle(id,{handle_status,handle_remark}) → 处理
+  GET    /alarms/stats   → alarmApi.stats()                → 统计(Record<string,number>)
+  GET    /alarms/recent  → alarmApi.recent()               → 最近告警(Alarm[])
+  GET    /alarms/trends  → alarmApi.trends(params)         → 趋势
+
+告警规则：
+  GET    /alarm-rules     → alarmApi.rules.list(params)    → 分页
+  POST   /alarm-rules     → alarmApi.rules.create(data)    → 创建
+  PUT    /alarm-rules/:id → alarmApi.rules.update(id,data) → 更新
+  DELETE /alarm-rules/:id → alarmApi.rules.delete(id)      → 删除
+
+处理弹窗 vs HandleAlarmRequest：
+  handle_status √ (必填), handle_remark √ (可选)
+  - [ ] 确认后端 HandleAlarmRequest 是否包含 handle_remark 字段（当前 struct 只有 handle_status）
+
+告警规则表单 vs model.AlarmRule(json tag)：
+  rule_name √, alarm_type √, scope_type √, scope_id √
+  suppression_rule √ (JSON 字符串), escalation_rule √ (JSON 字符串)
+  - [ ] 确认创建/编辑时 status 字段是否需要前端传值
+
+筛选参数：alarm_level, handle_status, robot_id, station_id
+  - [ ] 确认后端 GET /alarms 支持这些 query params
+
+表格 dataIndex：alarm_id, alarm_level, alarm_type, robot_id, alarm_content, alarm_time, handle_status
+  - [ ] 确认与后端 Alarm model json tag 一致
+
+常量值验证：
+  ALARM_LEVEL_MAP: 1=提示, 2=一般, 3=严重, 4=紧急
+  ALARM_HANDLE_MAP: 0=未处理, 1=已确认, 2=处理中, 3=已完成, 4=已忽略
+  - [ ] 与后端枚举定义一致
+```
+
+## 7. 系统管理 — System（10 个 Tab）
+
+```
+文件：System/index.tsx, api/system.ts (13个 API 对象)
+后端：user/role/organization/system_config/dict/audit/notify/report_template/backup handler
+
+用户管理：
+  GET /users, POST /users, PUT /users/:id, DELETE /users/:id
+  创建表单 vs CreateUserRequest: username, password, real_name, phone, email, role_id, station_ids
+  编辑表单 vs UpdateUserRequest: real_name, phone, email, role_id, station_ids, status
+  - [ ] user_id 类型：后端 string("admin01")，前端路径参数类型一致
+  - [ ] 确认 station_ids 前端如何输入（input? select?）
+
+角色管理：
+  GET /roles, POST /roles, PUT /roles/:id, DELETE /roles/:id
+  返回数组(非分页)，System 页面是否还有 .data/.list 遗留访问
+  表单 vs CreateRoleRequest: role_name, description, permissions
+  - [ ] permissions 序列化格式：前端多选 → JSON.stringify → 后端 JSON 字符串
+
+组织管理：
+  GET /organizations, GET /organizations/tree, GET /organizations/:id
+  POST /organizations, PUT /organizations/:id, DELETE /organizations/:id
+  表单 vs model.Organization(json tag)
+
+系统配置：
+  GET /system/configs, PUT /system/configs/:key (body:{config_value})
+  - [ ] config_key 类型：后端 string，前端 URL 参数一致
+
+数据字典：
+  GET /dicts, POST /dicts, PUT /dicts/:id, DELETE /dicts/:id
+  GET /dicts/:type/items, POST /dicts/:type/items
+  PUT /dicts/items/:id, DELETE /dicts/items/:id
+
+审计日志 / 登录日志：
+  GET /audit-logs, GET /login-logs
+  - [ ] 返回字段与表格 dataIndex 对齐（System/index.tsx 之前修过 .data 访问）
+
+通知模板 / 报告模板 / 备份恢复：
+  各 4 个 CRUD 端点，确认表单字段与 model 结构体 json tag 对齐
+```
+
+## 8. 监控中心 — Monitor（仅 REST 部分）
+
+```
+文件：Monitor/index.tsx, api/monitor.ts
+后端：monitor_handler.go, station_handler.go (GetRealtimeData)
+
+REST 接口：
+  GET /monitor/overview      → monitorApi.getDashboard()       → DashboardOverview
+  GET /stations/:id/realtime → monitorApi.getRealtime(stationId) → StationRealtime
+  GET /monitor/tracks        → monitorApi.getTracks({robot_id,start_time,end_time,limit}) → RobotPosition[]
+  GET /monitor/environment   → monitorApi.getEnvironment({robot_id,start_time,end_time})
+  GET /monitor/gis-config    → monitorApi.getGisConfig()       → Record<string,string>
+  PUT /monitor/gis-config    → monitorApi.updateGisConfig(data) → GISConfigRequest
+
+轨迹回放字段 RobotPosition vs 后端返回：
+  robot_id, pos_x, pos_y, pos_z, heading, timestamp
+
+电站实时数据 StationRealtime/RobotRealtime vs 后端返回：
+  station_id, station_name, longitude, latitude
+  robots[].robot_id, robot_name, robot_type, online_status, work_status
+  robots[].battery_level, pos_x, pos_y, pos_z, heading, speed, clean_area
+  robots[].temperature, humidity, light_intensity, wind_speed
+```
+
+## 9. 数据分析 — Analytics
+
+```
+文件：Analytics/index.tsx, api/analytics.ts
+后端：analytics_handler.go, prediction_handler.go (全 GET，query params)
+
+接口对照：
+  GET /analytics/economic                  → analyticsApi.economic(params)
+  GET /analytics/efficiency                → analyticsApi.efficiency(params)
+  GET /analytics/reports                   → analyticsApi.reports(params)
+  GET /analytics/compare                   → analyticsApi.compare(params)
+  GET /analytics/timeseries                → analyticsApi.timeseries(params)
+  GET /analytics/export                    → analyticsApi.export(params) [blob]
+  GET /analytics/predictions/efficiency    → analyticsApi.predictions.efficiency(params)
+  GET /analytics/predictions/fault         → analyticsApi.predictions.fault(params)
+  GET /analytics/strategy/optimize         → analyticsApi.predictions.strategy(params)
+
+Query params: station_id, start_date, end_date, robot_type √
+
+⚠ 注意：Analytics 页面中多处 (res as any)?.data ?? res
+  这表明返回数据格式不确定。需确认后端各接口实际返回的 JSON 结构。
+  例如 GET /analytics/economic 返回的是 {data:{...}} 还是直接数组？
+  用浏览器 DevTools Network 面板实际调一次确认。
+
+导出功能：responseType: blob，用 window.URL.createObjectURL 下载
+  - [ ] 确认后端 GET /analytics/export 返回的是文件流而非 JSON
+```
+
+## 10. 固件 / 维护 / 摄像头
+
+```
+固件管理 — Firmwares/index.tsx, api/system.ts firmwareApi:
+  GET /firmwares, POST /firmwares (FormData multipart)
+  PUT /firmwares/:id, DELETE /firmwares/:id
+  POST /firmwares/:id/upgrade → body: {robot_ids:string[]} vs UpgradeRobotRequest
+  - [ ] POST /firmwares 是 FormData 上传，确认文件字段名与后端期望一致
+
+维护保养 — Maintenance/index.tsx, api/system.ts maintenanceApi:
+  GET /maintenance, POST /maintenance, PUT /maintenance/:id, DELETE /maintenance/:id
+  GET /maintenance/reminders
+  表单 vs model.Maintenance(json tag)
+
+摄像头 — Cameras/index.tsx, api/system.ts cameraApi:
+  GET /cameras, POST /cameras, PUT /cameras/:id, DELETE /cameras/:id
+  表单 vs model.Camera(json tag)
+```
+
+## 11. 机器人配置 — RobotConfig
+
+```
+api/robots.ts robotApi.applyConfig:
+  GET /robot-configs, POST /robot-configs, PUT /robot-configs/:id, DELETE /robot-configs/:id
+  POST /robots/:id/config/apply → body: {config_id} vs ApplyConfigRequest √
+  表单 vs model.RobotConfig(json tag)
+```
+
+---
+
+## 跨切面验证
+
+### A. 响应解包一致性（防回归）
+
+```
+分页接口 (stations/robots/tasks/users/alarms/audit-logs/login-logs/alarm-rules)：
+  后端: {code:0, data:{list:[...], total:N}}
+  拦截器解包后: {list:[...], total:N}
+  前端取值: res.list, res.total
+
+数组接口 (stations/all, roles, organizations)：
+  后端: {code:0, data:[...]}
+  拦截器解包后: [...]
+  前端: 直接当数组用 — 确认无 .data 或 .list 访问
+
+单个对象接口 (GET /:id, POST/PUT 返回值)：
+  后端: {code:0, data:{...}}
+  拦截器解包后: {...}
+  前端: 直接当对象用
+
+⚠ 重点检查 System/index.tsx（2038 行，之前修过一批 .data 访问，可能还有遗漏）
+```
+
+### B. Go 类型 → JS 类型 边界
+
+```
+Go int/int8/int64 → JSON number → JS number
+  Select/Option value 必须用 Number(k)，否则 "1" !== 1 导致匹配失败
+
+Go float64 → JSON number → JS number
+  InputNumber 必须不设 stringMode，否则发 "116.4" 字符串 → Go ShouldBindJSON 失败 → 400
+
+Go string → JSON string → JS string
+  station_id/robot_id 等 UUID/短ID，URL 拼接正常
+
+Go time.Time → JSON string (ISO 8601) → JS string
+  前端直接显示 √
+  前端 dayjs format → 后端 time.Time 解析 "YYYY-MM-DD HH:mm:ss" √
+
+Go *time.Time → JSON string | null → JS 需处理 null
+  表格 render: val || '-' 或 val ? xx : '-'
+```
+
+### C. 错误处理路径
+
+```
+所有 API 调用 catch 块的 3 种分支：
+  1. 网络错误 → interceptor 统一弹 message.error
+  2. 业务错误(code≠0) → interceptor 统一弹 message.error
+  3. 表单验证错误(errorFields) → 判断后 return，不弹 toast
+
+- [ ] 确认无页面自己再弹一次 message.error 导致重复提示
+- [ ] 确认 loading 状态在所有分支下正确翻转 (try-finally √)
+```
+
+---
+
+## 已确认 Bug
+
+| # | 文件 | 行 | 问题 | 修复 |
+|---|------|----|------|------|
+| 1 | Stations/index.tsx | 139 | `dataIndex: 'address'` → 后端返回 `location` | 改为 `dataIndex: 'location'` |
+| 2 | Analytics/index.tsx | 84,119,170,196,224 | `(res as any)?.data ?? res` — API 已解包了但代码再次 .data | 统一改为直接使用 res，确认后端返回格式后去掉 `.data` |
+
+---
+
+## 验证顺序
+
+```
+P0: 登录 → 电站 CRUD → 仪表盘 (核心链路)
+P1: 机器人 CRUD + 任务 CRUD + 告警 CRUD (业务核心)
+P2: System 10 个 Tab + 监控中心 REST + 数据分析
+P3: 固件 + 维护 + 摄像头 + 响应解包一致性检查
+
+每完成一项标记 ✅
+```
