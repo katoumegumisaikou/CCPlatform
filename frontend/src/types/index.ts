@@ -250,33 +250,6 @@ export interface Organization {
   children?: Organization[];
 }
 
-// ===== 系统配置 =====
-
-export interface SystemConfig {
-  config_key: string;
-  config_value: string;
-  category: string;
-  description: string;
-}
-
-// ===== 字典 =====
-
-export interface DictType {
-  id: number;
-  dict_type: string;
-  dict_name: string;
-  status: number;
-}
-
-export interface DictItem {
-  id: number;
-  dict_type: string;
-  dict_key: string;
-  dict_value: string;
-  sort_order: number;
-  status: number;
-}
-
 // ===== WebSocket 消息 =====
 
 export type WsMessageType = 'heartbeat' | 'position' | 'status' | 'alarm' | 'clean';
@@ -284,28 +257,6 @@ export type WsMessageType = 'heartbeat' | 'position' | 'status' | 'alarm' | 'cle
 export interface WsMessage {
   type: WsMessageType;
   data: Record<string, unknown>;
-}
-
-// ===== 通知模板 =====
-
-export interface NotifyTemplate {
-  tpl_id: string;
-  tpl_name: string;
-  tpl_type: string;
-  alarm_level: number;
-  content: string;
-  status: number;
-}
-
-// ===== 报告模板 =====
-
-export interface ReportTemplate {
-  tpl_id: string;
-  tpl_name: string;
-  tpl_type: string;
-  dimensions: string;
-  metrics: string;
-  status: number;
 }
 
 // ===== 数据分析 =====

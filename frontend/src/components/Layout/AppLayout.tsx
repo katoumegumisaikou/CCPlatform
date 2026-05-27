@@ -30,14 +30,6 @@ const menuItems = [
     children: [
       { key: '/system/users', label: '用户管理' },
       { key: '/system/roles', label: '角色管理' },
-      { key: '/system/organizations', label: '组织架构' },
-      { key: '/system/configs', label: '系统配置' },
-      { key: '/system/dicts', label: '数据字典' },
-      { key: '/system/audit-logs', label: '审计日志' },
-      { key: '/system/login-logs', label: '登录日志' },
-      { key: '/system/notify-templates', label: '通知模板' },
-      { key: '/system/report-templates', label: '报告模板' },
-      { key: '/system/backups', label: '备份恢复' },
     ],
   },
   { key: '/firmwares', icon: <CloudServerOutlined />, label: '固件管理' },
@@ -59,14 +51,6 @@ const breadcrumbMap: Record<string, string> = {
   '/cameras': '摄像头管理',
   '/system/users': '用户管理',
   '/system/roles': '角色管理',
-  '/system/organizations': '组织架构',
-  '/system/configs': '系统配置',
-  '/system/dicts': '数据字典',
-  '/system/audit-logs': '审计日志',
-  '/system/login-logs': '登录日志',
-  '/system/notify-templates': '通知模板',
-  '/system/report-templates': '报告模板',
-  '/system/backups': '备份恢复',
 };
 
 export default function AppLayout() {

@@ -1,7 +1,6 @@
 import client from './client';
 import type {
-  PageData, User, Role, Organization, SystemConfig, DictType, DictItem,
-  NotifyTemplate, ReportTemplate, Camera, Firmware, Maintenance,
+  PageData, User, Role, Organization, Camera, Firmware, Maintenance,
 } from '../types';
 
 export const userApi = {
@@ -39,55 +38,6 @@ export const orgApi = {
     client.put<Organization>(`/organizations/${id}`, data),
   delete: (id: number) =>
     client.delete<null>(`/organizations/${id}`),
-};
-
-export const configApi = {
-  list: () =>
-    client.get<SystemConfig[]>('/system/configs'),
-  get: (key: string) =>
-    client.get<SystemConfig>(`/system/configs/${key}`),
-  set: (key: string, value: string) =>
-    client.put<null>(`/system/configs/${key}`, { config_value: value }),
-  delete: (key: string) =>
-    client.delete<null>(`/system/configs/${key}`),
-};
-
-export const dictApi = {
-  types: {
-    list: () => client.get<DictType[]>('/dicts'),
-    create: (data: Partial<DictType>) => client.post<DictType>('/dicts', data),
-    update: (id: number, data: Partial<DictType>) => client.put<DictType>(`/dicts/${id}`, data),
-    delete: (id: number) => client.delete<null>(`/dicts/${id}`),
-  },
-  items: {
-    list: (type: string) => client.get<DictItem[]>(`/dicts/${type}/items`),
-    create: (type: string, data: Partial<DictItem>) =>
-      client.post<DictItem>(`/dicts/${type}/items`, data),
-    update: (id: number, data: Partial<DictItem>) => client.put<DictItem>(`/dicts/items/${id}`, data),
-    delete: (id: number) => client.delete<null>(`/dicts/items/${id}`),
-  },
-};
-
-export const notifyApi = {
-  list: () =>
-    client.get<NotifyTemplate[]>('/notify/templates'),
-  create: (data: Partial<NotifyTemplate>) =>
-    client.post<NotifyTemplate>('/notify/templates', data),
-  update: (id: string, data: Partial<NotifyTemplate>) =>
-    client.put<NotifyTemplate>(`/notify/templates/${id}`, data),
-  delete: (id: string) =>
-    client.delete<null>(`/notify/templates/${id}`),
-};
-
-export const reportApi = {
-  list: () =>
-    client.get<ReportTemplate[]>('/report-templates'),
-  create: (data: Partial<ReportTemplate>) =>
-    client.post<ReportTemplate>('/report-templates', data),
-  update: (id: string, data: Partial<ReportTemplate>) =>
-    client.put<ReportTemplate>(`/report-templates/${id}`, data),
-  delete: (id: string) =>
-    client.delete<null>(`/report-templates/${id}`),
 };
 
 export const cameraApi = {
@@ -129,23 +79,3 @@ export const maintenanceApi = {
     client.get<Maintenance[]>('/maintenance/reminders'),
 };
 
-export const auditApi = {
-  list: (params?: Record<string, unknown>) =>
-    client.get<PageData<unknown>>('/audit-logs', { params }),
-};
-
-export const loginLogApi = {
-  list: (params?: Record<string, unknown>) =>
-    client.get<PageData<unknown>>('/login-logs', { params }),
-};
-
-export const backupApi = {
-  list: () =>
-    client.get<Array<{ filename: string; size: number; create_time: string }>>('/backups'),
-  create: () =>
-    client.post<null>('/backups'),
-  delete: (filename: string) =>
-    client.delete<null>(`/backups/${filename}`),
-  restore: (filename: string) =>
-    client.post<null>(`/backups/${filename}/restore`),
-};

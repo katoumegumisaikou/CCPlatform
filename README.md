@@ -277,6 +277,7 @@ CCPlatform/
 ### 前置条件
 
 - Go 1.21+
+- Node.js 20+ (前端开发)
 - MySQL 8.0+
 
 ### 1. 初始化数据库
@@ -312,33 +313,32 @@ jwt:
   secret: your-secret-key       # 修改为随机密钥
 ```
 
-### 3. 编译运行
+### 3. 启动项目
 
 ```bash
-# 开发模式（直接运行）
-make dev
+# 一键启动后端(8080) + 前端(5173)
+make dev-all
 
-# 构建并运行
-make run
+# 或分别启动：
+make dev              # 后端: http://localhost:8080
+make fe-dev           # 前端: http://localhost:5173
 
-# 编译
-make build
-
-# 运行测试
-make test
-
-# 整理依赖
-make tidy
+# 首次启动前端前需安装依赖
+make fe-install
 ```
 
-### 4. 启动前端
+### 4. 常用命令
 
-```bash
-cd frontend
-npm install
-npm run dev        # 开发模式，默认 http://localhost:5173
-npm run build      # 生产构建
-```
+| 命令 | 说明 |
+|------|------|
+| `make dev` | 启动 Go 后端开发服务器 |
+| `make build` | 编译后端二进制 |
+| `make run` | 编译并运行后端 |
+| `make test` | 运行后端测试 |
+| `make fe-dev` | 启动前端开发服务器 |
+| `make fe-build` | 生产构建前端 |
+| `make fe-install` | 安装前端依赖 |
+| `make dev-all` | 同时启动前后端 |
 
 前端开发服务器默认代理 API 请求到后端 `http://localhost:8080`。
 
