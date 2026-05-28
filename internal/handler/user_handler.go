@@ -14,7 +14,6 @@ import (
 )
 
 // UserHandler 用户与角色 HTTP 处理器，处理认证、用户管理和角色管理。
-//
 type UserHandler struct {
 	svc *service.UserService
 }
@@ -80,8 +79,9 @@ type CreateUserRequest struct {
 	RealName   string `json:"real_name"`                   // 真实姓名
 	Phone      string `json:"phone"`                       // 手机号
 	Email      string `json:"email"`                       // 邮箱
-	RoleID     string `json:"role_id"`                     // 角色 ID
+	RoleID     string `json:"role_id" binding:"required"`  // 角色 ID
 	StationIDs string `json:"station_ids"`                 // 授权电站 ID 列表
+	Status     *int8  `json:"status"`                      // 状态(0禁用 1启用)
 }
 
 // Create 创建用户接口，密码通过 bcrypt 加密存储。
@@ -92,6 +92,10 @@ func (h *UserHandler) Create(c *gin.Context) {
 		response.Error(c, errcode.ErrParam)
 		return
 	}
+	status := int8(1)
+	if req.Status != nil {
+		status = *req.Status
+	}
 	user := &model.User{
 		Username:   req.Username,
 		RealName:   req.RealName,
@@ -99,7 +103,7 @@ func (h *UserHandler) Create(c *gin.Context) {
 		Email:      req.Email,
 		RoleID:     req.RoleID,
 		StationIDs: req.StationIDs,
-		Status:     1,
+		Status:     status,
 	}
 	if err := h.svc.Create(user, req.Password); err != nil {
 		if errors.Is(err, gorm.ErrDuplicatedKey) {
@@ -114,12 +118,12 @@ func (h *UserHandler) Create(c *gin.Context) {
 
 // UpdateUserRequest 更新用户请求体，所有字段可选。
 type UpdateUserRequest struct {
-	RealName   string `json:"real_name"`  // 真实姓名
-	Phone      string `json:"phone"`      // 手机号
-	Email      string `json:"email"`      // 邮箱
-	RoleID     string `json:"role_id"`    // 角色 ID
+	RealName   string `json:"real_name"`   // 真实姓名
+	Phone      string `json:"phone"`       // 手机号
+	Email      string `json:"email"`       // 邮箱
+	RoleID     string `json:"role_id"`     // 角色 ID
 	StationIDs string `json:"station_ids"` // 授权电站 ID 列表
-	Status     *int8  `json:"status"`     // 状态(0禁用 1启用)
+	Status     *int8  `json:"status"`      // 状态(0禁用 1启用)
 }
 
 // Update 更新用户接口，采用部分更新策略。

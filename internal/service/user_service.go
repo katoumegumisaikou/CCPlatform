@@ -5,12 +5,14 @@ import (
 	"ccplatform/internal/model"
 	"ccplatform/internal/repository"
 	"ccplatform/pkg/util"
+	"errors"
 	"fmt"
 	"time"
+
+	"gorm.io/gorm"
 )
 
 // UserService 用户与角色业务逻辑层，处理用户认证、RBAC 权限和系统初始化。
-//
 type UserService struct {
 	repo     *repository.UserRepo
 	roleRepo *repository.RoleRepo
@@ -26,6 +28,16 @@ func NewUserService() *UserService {
 
 // Create 创建新用户，密码通过 bcrypt 加密存储。
 func (s *UserService) Create(user *model.User, password string) error {
+	existing, err := s.repo.GetByUsername(user.Username)
+	if err == nil && existing.UserID != "" {
+		return gorm.ErrDuplicatedKey
+	}
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return err
+	}
+	if user.UserID == "" {
+		user.UserID = util.GenerateID()
+	}
 	hash, err := util.HashPassword(password)
 	if err != nil {
 		return fmt.Errorf("hash password: %w", err)
@@ -101,12 +113,12 @@ func (s *UserService) Login(username, password, ip string) (string, error) {
 func (s *UserService) recordLoginLog(userID, username, ip string, result int8, failReason string) {
 	logRepo := repository.NewLoginLogRepo()
 	entry := &model.LoginLog{
-		UserID:     userID,
-		Username:   username,
-		LoginIP:    ip,
-		LoginTime:  time.Now(),
+		UserID:      userID,
+		Username:    username,
+		LoginIP:     ip,
+		LoginTime:   time.Now(),
 		LoginResult: result,
-		FailReason: failReason,
+		FailReason:  failReason,
 	}
 	go func() {
 		_ = logRepo.Create(entry)

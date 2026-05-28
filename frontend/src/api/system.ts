@@ -3,14 +3,17 @@ import type {
   PageData, User, Role, Organization, Camera, Firmware, Maintenance,
 } from '../types';
 
+type CreateUserPayload = Partial<User> & { password: string };
+type UpdateUserPayload = Partial<User>;
+
 export const userApi = {
   list: (params?: Record<string, unknown>) =>
     client.get<PageData<User>>('/users', { params }),
-  create: (data: Partial<User>) =>
+  create: (data: CreateUserPayload) =>
     client.post<User>('/users', data),
-  update: (id: number, data: Partial<User>) =>
+  update: (id: string, data: UpdateUserPayload) =>
     client.put<User>(`/users/${id}`, data),
-  delete: (id: number) =>
+  delete: (id: string) =>
     client.delete<null>(`/users/${id}`),
 };
 
@@ -19,9 +22,9 @@ export const roleApi = {
     client.get<Role[]>('/roles'),
   create: (data: Partial<Role>) =>
     client.post<Role>('/roles', data),
-  update: (id: number, data: Partial<Role>) =>
+  update: (id: string, data: Partial<Role>) =>
     client.put<Role>(`/roles/${id}`, data),
-  delete: (id: number) =>
+  delete: (id: string) =>
     client.delete<null>(`/roles/${id}`),
 };
 
@@ -30,13 +33,13 @@ export const orgApi = {
     client.get<Organization[]>('/organizations'),
   tree: () =>
     client.get<Organization[]>('/organizations/tree'),
-  getById: (id: number) =>
+  getById: (id: string) =>
     client.get<Organization>(`/organizations/${id}`),
   create: (data: Partial<Organization>) =>
     client.post<Organization>('/organizations', data),
-  update: (id: number, data: Partial<Organization>) =>
+  update: (id: string, data: Partial<Organization>) =>
     client.put<Organization>(`/organizations/${id}`, data),
-  delete: (id: number) =>
+  delete: (id: string) =>
     client.delete<null>(`/organizations/${id}`),
 };
 
@@ -78,4 +81,3 @@ export const maintenanceApi = {
   reminders: () =>
     client.get<Maintenance[]>('/maintenance/reminders'),
 };
-

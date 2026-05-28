@@ -24,7 +24,7 @@ func (r *UserRepo) Create(user *model.User) error {
 // GetByID 根据用户 ID 查询单条记录。
 func (r *UserRepo) GetByID(id string) (*model.User, error) {
 	var user model.User
-	err := r.db.Where("user_id = ?", id).First(&user).Error
+	err := r.db.Preload("Role").Where("user_id = ?", id).First(&user).Error
 	return &user, err
 }
 
@@ -59,7 +59,7 @@ func (r *UserRepo) List(page, size int, keyword string) ([]model.User, int64, er
 		query = query.Where("username LIKE ? OR real_name LIKE ?", "%"+keyword+"%", "%"+keyword+"%")
 	}
 	query.Count(&total)
-	err := query.Offset((page - 1) * size).Limit(size).Order("create_time DESC").Find(&users).Error
+	err := query.Preload("Role").Offset((page - 1) * size).Limit(size).Order("create_time DESC").Find(&users).Error
 	return users, total, err
 }
 

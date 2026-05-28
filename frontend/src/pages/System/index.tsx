@@ -8,8 +8,9 @@ import {
   PlusOutlined, EditOutlined, DeleteOutlined, ReloadOutlined,
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
-import { userApi, roleApi, orgApi } from '../../api/system';
-import type { User, Role, Organization } from '../../types';
+import { userApi, roleApi } from '../../api/system';
+import { stationApi } from '../../api/stations';
+import type { User, Role, Station } from '../../types';
 
 // ===== 常量定义 =====
 
@@ -63,7 +64,7 @@ function UsersTab() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [roles, setRoles] = useState<Role[]>([]);
-  const [orgs, setOrgs] = useState<Organization[]>([]);
+  const [stations, setStations] = useState<Station[]>([]);
   const [form] = Form.useForm();
 
   const fetchData = useCallback(async () => {
@@ -79,14 +80,14 @@ function UsersTab() {
     }
   }, [page, pageSize]);
 
-  const fetchRolesAndOrgs = useCallback(async () => {
+  const fetchRolesAndStations = useCallback(async () => {
     try {
-      const [rolesRes, orgsRes] = await Promise.all([
+      const [rolesRes, stationsRes] = await Promise.all([
         roleApi.list(),
-        orgApi.list(),
+        stationApi.getAll(),
       ]);
       setRoles(rolesRes || []);
-      setOrgs(orgsRes || []);
+      setStations(stationsRes || []);
     } catch { /* ignore */ }
   }, []);
 
@@ -95,8 +96,8 @@ function UsersTab() {
   const handleAdd = () => {
     setEditingUser(null);
     form.resetFields();
-    form.setFieldsValue({ status: 1 });
-    fetchRolesAndOrgs();
+    form.setFieldsValue({ status: true, station_ids: [] });
+    fetchRolesAndStations();
     setModalOpen(true);
   };
 
@@ -106,12 +107,12 @@ function UsersTab() {
       username: record.username,
       real_name: record.real_name,
       role_id: record.role_id,
-      org_id: record.org_id,
+      station_ids: record.station_ids ? record.station_ids.split(',').filter(Boolean) : [],
       phone: record.phone,
       email: record.email,
-      status: record.status,
+      status: record.status === 1,
     });
-    fetchRolesAndOrgs();
+    fetchRolesAndStations();
     setModalOpen(true);
   };
 
@@ -119,14 +120,19 @@ function UsersTab() {
     try {
       const values = await form.validateFields();
       const payload = {
-        ...values,
+        username: values.username,
+        real_name: values.real_name,
+        role_id: values.role_id,
+        station_ids: Array.isArray(values.station_ids) ? values.station_ids.join(',') : '',
+        phone: values.phone,
+        email: values.email,
         status: values.status ? 1 : 0,
       };
       if (editingUser) {
         await userApi.update(editingUser.user_id, payload);
         message.success('用户更新成功');
       } else {
-        await userApi.create(payload);
+        await userApi.create({ ...payload, password: values.password });
         message.success('用户创建成功');
       }
       setModalOpen(false);
@@ -136,7 +142,7 @@ function UsersTab() {
     }
   };
 
-  const handleDelete = async (id: number) => {
+  const handleDelete = async (id: string) => {
     try {
       await userApi.delete(id);
       message.success('用户已删除');
@@ -240,10 +246,12 @@ function UsersTab() {
               options={roles.map(r => ({ label: r.role_name, value: r.role_id }))}
             />
           </Form.Item>
-          <Form.Item name="org_id" label="所属组织" rules={[{ required: true, message: '请选择组织' }]}>
+          <Form.Item name="station_ids" label="授权电站">
             <Select
-              placeholder="请选择组织"
-              options={orgs.map(o => ({ label: o.org_name, value: o.org_id }))}
+              mode="multiple"
+              allowClear
+              placeholder="请选择可访问电站，不选表示暂不限制"
+              options={stations.map(s => ({ label: s.station_name, value: s.station_id }))}
               showSearch
               optionFilterProp="label"
             />
@@ -327,7 +335,7 @@ function RolesTab() {
     }
   };
 
-  const handleDelete = async (id: number) => {
+  const handleDelete = async (id: string) => {
     try {
       await roleApi.delete(id);
       message.success('角色已删除');

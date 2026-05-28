@@ -47,8 +47,8 @@ const ProfilePage: React.FC = () => {
           <Descriptions.Item label="角色">
             {user.role?.role_name ?? '-'}
           </Descriptions.Item>
-          <Descriptions.Item label="组织ID">
-            {user.org_id ?? '-'}
+          <Descriptions.Item label="授权电站">
+            {user.station_ids || '-'}
           </Descriptions.Item>
           <Descriptions.Item label="手机号">
             <PhoneOutlined style={{ marginRight: 8 }} />

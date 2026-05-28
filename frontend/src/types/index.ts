@@ -25,11 +25,11 @@ export interface Pagination {
 // ===== 用户 & 认证 =====
 
 export interface User {
-  user_id: number;
+  user_id: string;
   username: string;
   real_name: string;
-  role_id: number;
-  org_id: number;
+  role_id: string;
+  station_ids?: string;
   phone: string;
   email: string;
   status: number;
@@ -37,11 +37,12 @@ export interface User {
 }
 
 export interface Role {
-  role_id: number;
+  role_id: string;
   role_name: string;
-  role_code: string;
+  description: string;
   permissions: string;
-  status: number;
+  role_code?: string;
+  status?: number;
 }
 
 export interface LoginRequest {
@@ -242,10 +243,12 @@ export interface Maintenance {
 // ===== 组织 =====
 
 export interface Organization {
-  org_id: number;
+  org_id: string;
   org_name: string;
-  parent_id: number;
+  parent_id: string;
   org_code: string;
+  org_type?: string;
+  station_ids?: string;
   status: number;
   children?: Organization[];
 }
