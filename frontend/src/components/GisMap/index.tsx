@@ -303,6 +303,18 @@ export default function GisMap({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // ---- Keep Leaflet view in sync with selected station ----
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    map.setView(center, zoom);
+    window.requestAnimationFrame(() => {
+      map.invalidateSize();
+      robotLayerRef.current?.scheduleDraw();
+    });
+  }, [center, zoom]);
+
   // ---- Update robot layer data ----
   useEffect(() => {
     const layer = robotLayerRef.current;

@@ -86,7 +86,7 @@ const MOCK_STATION: Station = {
   panel_count: 3200, org_id: 1, status: 1, create_time: new Date().toISOString(),
 };
 
-const MOCK_ROBOT_COUNT = 240;
+const MOCK_ROBOT_COUNT = 30;
 const MOCK_WORLD_BOUNDS = { minX: 0, maxX: 120, minY: 0, maxY: 90 };
 const MOCK_BASE_POINT = { x: 6, y: 8 };
 
@@ -131,6 +131,10 @@ function mockWorldToLatLng(x: number, y: number): { longitude: number; latitude:
   };
 }
 
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
 function mockTrackSeed(robotId: string) {
   return robotId.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0) % 80;
 }
@@ -150,41 +154,45 @@ interface MockRobotSeed {
 }
 
 function makeMockRobotSeed(index: number): MockRobotSeed {
-  if (index < 100) {
-    const row = Math.floor(index / 20);
-    const col = index % 20;
+  // 10 固定式 (index 0-9): 单排在光伏板阵列顶部
+  if (index < 10) {
+    const i = index;
+    const minX = 12;
+    const maxX = 108;
     return {
-      robotId: `mock-fixed-${String(index + 1).padStart(3, '0')}`,
-      robotName: `固定式${String(index + 1).padStart(3, '0')}`,
+      robotId: `mock-fixed-${String(i + 1).padStart(3, '0')}`,
+      robotName: `固定式${String(i + 1).padStart(3, '0')}`,
       robotType: 1,
-      initX: 10 + col * 5,
-      initY: 8 + row * 20,
-      phase: (row * 20 + col) * 0.13,
-      batteryBase: 85 + (index % 20),
+      initX: minX + (i / 9) * (maxX - minX),
+      initY: 12,
+      phase: i * 0.35,
+      batteryBase: 82 + (i % 18),
     };
   }
-  if (index < 140) {
-    const si = index - 100;
-    const lane = si % 4;
+  // 10 接驳车 (index 10-19): 在光伏板列间通道
+  if (index < 20) {
+    const i = index - 10;
+    const laneXs = [26, 44, 62, 80, 98];
     return {
-      robotId: `mock-shuttle-${String(si + 1).padStart(3, '0')}`,
-      robotName: `接驳车${String(si + 1).padStart(3, '0')}`,
+      robotId: `mock-shuttle-${String(i + 1).padStart(3, '0')}`,
+      robotName: `接驳车${String(i + 1).padStart(3, '0')}`,
       robotType: 2,
-      initX: 15 + lane * 30,
-      initY: 20 + (si % 10) * 8,
-      phase: si * 0.2,
-      batteryBase: 78 + (si % 25),
+      initX: laneXs[i % laneXs.length],
+      initY: 12 + Math.floor(i / laneXs.length) * 34,
+      phase: i * 0.45,
+      batteryBase: 78 + (i % 22),
     };
   }
-  const si = index - 140;
+  // 10 全智能 (index 20-29): 中央区域自由分布
+  const i = index - 20;
   return {
-    robotId: `mock-smart-${String(si + 1).padStart(3, '0')}`,
-    robotName: `全智能${String(si + 1).padStart(3, '0')}`,
+    robotId: `mock-smart-${String(i + 1).padStart(3, '0')}`,
+    robotName: `全智能${String(i + 1).padStart(3, '0')}`,
     robotType: 3,
-    initX: 30 + (si % 8) * 8,
-    initY: 30 + Math.floor(si / 8) * 10,
-    phase: si * 0.15,
-    batteryBase: 70 + (si % 30),
+    initX: 30 + (i % 5) * 15,
+    initY: 34 + Math.floor(i / 5) * 18,
+    phase: i * 0.62,
+    batteryBase: 72 + (i % 28),
   };
 }
 
@@ -231,26 +239,32 @@ function makeMockRobot(
     speed = 0.85;
     workStatus = progress >= 1 ? 2 : 1;
   } else if (seed.robotType === 1) {
-    const progress = (Math.sin(t * 0.72 + seed.phase) + 1) / 2;
+    // 固定式：X 轴往复清扫，Y 固定
+    const wave = Math.sin(t * 0.72 + seed.phase);
     heading = Math.cos(t * 0.72 + seed.phase) >= 0 ? 90 : 270;
-    posX = seed.initX + progress * 4;
+    posX = clamp(seed.initX + wave * 8, 8, 112);
     posY = seed.initY;
-    speed = 0.82;
+    speed = 0.75;
   } else if (seed.robotType === 2) {
-    const loop = (t * 0.42 + seed.phase) % 4;
-    const lane = Math.floor(loop);
-    const section = loop - lane;
-    posX = seed.initX + (lane % 2 === 0 ? section * 6 : 6 - section * 6);
-    posY = seed.initY;
-    heading = lane % 2 === 0 ? 90 : 270;
-    speed = 1.15;
+    // 接驳车：Y 轴上下穿行于列间通道，X 基本不变
+    const wave = Math.sin(t * 0.55 + seed.phase);
+    heading = Math.cos(t * 0.55 + seed.phase) >= 0 ? 180 : 0;
+    posX = seed.initX;
+    posY = clamp(seed.initY + wave * 28, 8, 82);
+    speed = 1.05;
   } else {
-    const angle = t * 0.55 + seed.phase;
-    const radius = 3;
-    posX = seed.initX + Math.cos(angle) * radius;
-    posY = seed.initY + Math.sin(angle) * radius;
-    heading = ((angle * 180) / Math.PI + 90) % 360;
-    speed = 0.68 + Math.sin(t) * 0.12;
+    // 全智能：Lissajous 自由巡航
+    const ax = 18;
+    const ay = 14;
+    const xPhase = t * 0.42 + seed.phase;
+    const yPhase = t * 0.31 + seed.phase * 1.3;
+    posX = clamp(seed.initX + Math.sin(xPhase) * ax + Math.sin(t * 0.17 + seed.phase) * 4, 8, 112);
+    posY = clamp(seed.initY + Math.sin(yPhase) * ay, 8, 82);
+    // 用 t+0.1 近似计算朝向
+    const nextX = clamp(seed.initX + Math.sin((t + 0.1) * 0.42 + seed.phase) * ax + Math.sin((t + 0.1) * 0.17 + seed.phase) * 4, 8, 112);
+    const nextY = clamp(seed.initY + Math.sin((t + 0.1) * 0.31 + seed.phase * 1.3) * ay, 8, 82);
+    heading = (Math.atan2(nextX - posX, nextY - posY) * 180) / Math.PI;
+    speed = 0.68 + Math.sin(t * 0.21) * 0.22;
     workStatus = tick % 70 > 60 ? 2 : 1;
   }
 
@@ -287,9 +301,18 @@ function makeRobotDetailFromRealtime(robot: RobotRealtime): Robot {
   };
 }
 
+function getMockSeedIndexByRobotId(robotId: string): number {
+  const match = robotId.match(/mock-(fixed|shuttle|smart)-(\d+)/);
+  if (!match) return 0;
+  const num = parseInt(match[2], 10) - 1;
+  if (match[1] === 'fixed') return num;
+  if (match[1] === 'shuttle') return 10 + num;
+  return 20 + num;
+}
+
 function makeMockTracks(robot: RobotRealtime | undefined, cmdStates: Map<string, MockCommandState>): RobotPosition[] {
   const target = robot ?? makeMockRobot(0, makeMockRobotSeed(0));
-  const seedIndex = target.robot_type === 2 ? 101 : target.robot_type === 3 ? 141 : 0;
+  const seedIndex = getMockSeedIndexByRobotId(target.robot_id);
   const seed = makeMockRobotSeed(seedIndex);
   const startTick = Math.max(0, mockTrackSeed(target.robot_id));
   return Array.from({ length: 90 }, (_, index) => {
@@ -360,6 +383,7 @@ export default function Monitor() {
   const [mockEnabled, setMockEnabled] = useState(false);
   const mockTickRef = useRef(0);
   const mockCommandStateRef = useRef<Map<string, MockCommandState>>(new Map());
+  const lastRealStationIdRef = useRef<string | undefined>(undefined);
 
   // ---- 实时数据 ----
   const [stationRealtime, setStationRealtime] = useState<StationRealtime | null>(null);
@@ -398,6 +422,25 @@ export default function Monitor() {
   // ---- Robot list table pagination ----
   const [robotListPage, setRobotListPage] = useState(1);
   const [robotListPageSize, setRobotListPageSize] = useState(20);
+
+  const resetRobotContext = useCallback(() => {
+    setSelectedRobotId(undefined);
+    setSelectedRobotIds(new Set());
+    setRobotDetail(null);
+    setTracks([]);
+    setTrackPlaybackIndex(0);
+    setTrackPlaybackRunning(false);
+    setActiveRobotTab('basic');
+    setTrackDateRange(null);
+    setEnvHistory([]);
+    setRobotListPage(1);
+    setDrawerOpen(false);
+  }, []);
+
+  const removeMockStation = useCallback(() => {
+    setStations((prev) => prev.filter((s) => s.station_id !== MOCK_STATION.station_id));
+    mockCommandStateRef.current.clear();
+  }, []);
 
   // =====================================================================
   // 数据获取
@@ -458,39 +501,67 @@ export default function Monitor() {
 
   const handleStationSelect = useCallback((value: string) => {
     if (value === MOCK_STATION.station_id) {
+      if (selectedStationId && selectedStationId !== MOCK_STATION.station_id) {
+        lastRealStationIdRef.current = selectedStationId;
+      }
       setMockEnabled(true);
       return;
     }
+
+    lastRealStationIdRef.current = value;
+    setMockEnabled(false);
+    removeMockStation();
+    setMapMode('gis');
     setSelectedStationId(value);
-    setSelectedRobotId(undefined);
-    setSelectedRobotIds(new Set());
-    setRobotDetail(null);
-    setTracks([]);
-    setTrackPlaybackIndex(0);
-    setTrackPlaybackRunning(false);
-    setActiveRobotTab('basic');
-    setTrackDateRange(null);
-    setDrawerOpen(false);
+    setStationRealtime(null);
+    setRobotMarkers(new Map());
+    resetRobotContext();
     fetchStationRealtime(value);
-  }, [fetchStationRealtime]);
+  }, [fetchStationRealtime, removeMockStation, resetRobotContext, selectedStationId]);
 
   const handleClearStation = useCallback(() => {
+    lastRealStationIdRef.current = undefined;
     setMockEnabled(false);
-    setStations((prev) => prev.filter((s) => s.station_id !== MOCK_STATION.station_id));
+    removeMockStation();
+    setMapMode('gis');
     setSelectedStationId(undefined);
     setStationRealtime(null);
     setRobotMarkers(new Map());
-    setSelectedRobotId(undefined);
-    setSelectedRobotIds(new Set());
-    setRobotDetail(null);
-    setTracks([]);
-    setTrackPlaybackIndex(0);
-    setTrackPlaybackRunning(false);
-    setActiveRobotTab('basic');
-    setTrackDateRange(null);
+    resetRobotContext();
     setRealtimeError(null);
-    setDrawerOpen(false);
-  }, []);
+    setRealtimeLoading(false);
+  }, [removeMockStation, resetRobotContext]);
+
+  const handleMockSwitchChange = useCallback((checked: boolean) => {
+    if (checked) {
+      if (selectedStationId && selectedStationId !== MOCK_STATION.station_id) {
+        lastRealStationIdRef.current = selectedStationId;
+      }
+      setMockEnabled(true);
+      return;
+    }
+
+    const stationId = lastRealStationIdRef.current;
+    if (stationId) {
+      handleStationSelect(stationId);
+    } else {
+      handleClearStation();
+    }
+  }, [handleClearStation, handleStationSelect, selectedStationId]);
+
+  const handleMapModeChange = useCallback((value: string | number) => {
+    const nextMode = value as 'gis' | 'scene';
+    if (nextMode === 'gis' && mockEnabled) {
+      const stationId = lastRealStationIdRef.current;
+      if (stationId) {
+        handleStationSelect(stationId);
+      } else {
+        handleClearStation();
+      }
+      return;
+    }
+    setMapMode(nextMode);
+  }, [handleClearStation, handleStationSelect, mockEnabled]);
 
   // ---- 模拟运行 effect ----
   useEffect(() => {
@@ -1249,7 +1320,7 @@ export default function Monitor() {
           <Space size={6}>
             <Text type="secondary" style={{ fontSize: 12 }}>模拟运行</Text>
             <Switch size="small" checked={mockEnabled}
-              onChange={(checked) => { if (checked) { setMockEnabled(true); } else { handleClearStation(); } }} />
+              onChange={handleMockSwitchChange} />
           </Space>
 
           {selectedStationId && (
@@ -1259,7 +1330,7 @@ export default function Monitor() {
 
           {selectedStationId && (
             <Segmented size="small" value={mapMode}
-              onChange={(value) => setMapMode(value as 'gis' | 'scene')}
+              onChange={handleMapModeChange}
               options={[{ label: 'GIS地图', value: 'gis' }, { label: '二维场景', value: 'scene' }]} />
           )}
 
@@ -1296,7 +1367,7 @@ export default function Monitor() {
       <div style={{
         flex: 1, borderRadius: 8, overflow: 'hidden', position: 'relative',
         minHeight: 560, border: '1px solid #f0f0f0',
-        height: 'calc(100vh - 180px)',
+        height: 'calc(100vh - 120px)',
       }}>
         {/* 加载指示器 */}
         {realtimeLoading && (
@@ -1326,7 +1397,7 @@ export default function Monitor() {
             stations={stationMarkerList}
             robots={robotMarkerList}
             center={mapCenter}
-            zoom={selectedStationId ? 15 : 5}
+            zoom={selectedStationId ? 16 : 5}
             selectedRobotId={selectedRobotId}
             selectedRobotIds={selectedRobotIds}
             onRobotSelect={handleRobotSelect}

@@ -44,7 +44,7 @@ interface Rect {
 
 const WORLD_BOUNDS = { minX: 0, maxX: 120, minY: 0, maxY: 90 };
 const ZOOM_MIN = 0.4;
-const ZOOM_MAX = 6;
+const ZOOM_MAX = 20;
 const PANEL_COLS = 6;
 const PANEL_ROWS = 5;
 const PANEL_CELL_W = 18;
@@ -329,7 +329,7 @@ export default function Station2DScene({
   const selectedRobotIdsRef = useRef(selectedRobotIds);
   const onRobotSelectRef = useRef(onRobotSelect);
   const onSelectionChangeRef = useRef(onSelectionChange);
-  const viewportRef = useRef<Viewport>({ zoom: 1, panX: 0, panY: 0 });
+  const viewportRef = useRef<Viewport>({ zoom: 10, panX: -60, panY: -45 });
   const visibleRobotsRef = useRef<Array<{ robotId: string; sx: number; sy: number; robot: SceneRobot }>>([]);
   const pointerStateRef = useRef<{
     mode: 'idle' | 'panning' | 'selecting' | 'dragging-robot';
@@ -337,7 +337,6 @@ export default function Station2DScene({
     currentPoint?: Point;
     startViewport?: Viewport;
     downTime?: number;
-    movedDistance?: number;
   }>({ mode: 'idle' });
   const lastRenderTimeRef = useRef(0);
 
@@ -509,7 +508,7 @@ export default function Station2DScene({
       pointerStateRef.current = { mode: 'selecting', downPoint: pt, currentPoint: pt };
     } else if (hit) {
       // Click on robot
-      pointerStateRef.current = { mode: 'idle', downPoint: pt, downTime: Date.now(), movedDistance: 0 };
+      pointerStateRef.current = { mode: 'idle', downPoint: pt, downTime: Date.now() };
     } else {
       // Start pan
       pointerStateRef.current = {
@@ -528,9 +527,8 @@ export default function Station2DScene({
     if (ps.mode === 'idle') {
       if (ps.downPoint) {
         const pt = getEventPoint(e);
-        ps.movedDistance = (ps.movedDistance ?? 0) + Math.hypot(pt.x - (ps.currentPoint?.x ?? ps.downPoint.x), pt.y - (ps.currentPoint?.y ?? ps.downPoint.y));
         ps.currentPoint = pt;
-        if (ps.movedDistance > 3) {
+        if (Math.hypot(pt.x - ps.downPoint.x, pt.y - ps.downPoint.y) > 8) {
           // transition to panning
           const vp = viewportRef.current;
           ps.mode = 'panning';
@@ -580,7 +578,10 @@ export default function Station2DScene({
     } else if (ps.mode === 'idle' && ps.downPoint && ps.downTime) {
       // click (no significant movement)
       const elapsed = Date.now() - ps.downTime;
-      if (elapsed < 300 && (ps.movedDistance ?? 0) < 4) {
+      const disp = ps.currentPoint
+        ? Math.hypot(ps.currentPoint.x - ps.downPoint.x, ps.currentPoint.y - ps.downPoint.y)
+        : 0;
+      if (elapsed < 300 && disp < 8) {
         const hit = hitTest(ps.downPoint);
         if (hit && onRobotSelectRef.current) {
           onRobotSelectRef.current(hit.robotId, { additive: e.ctrlKey || e.metaKey });
@@ -588,12 +589,12 @@ export default function Station2DScene({
       }
     }
 
-    ps.mode = 'idle';
+    pointerStateRef.current = { mode: 'idle' };
     canvas.releasePointerCapture(e.pointerId);
   };
 
   const handlePointerCancel = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    pointerStateRef.current.mode = 'idle';
+    pointerStateRef.current = { mode: 'idle' };
     canvasRef.current?.releasePointerCapture(e.pointerId);
   };
 
@@ -623,7 +624,7 @@ export default function Station2DScene({
 
   const handleDoubleClick = (_e: React.MouseEvent<HTMLCanvasElement>) => {
     // reset view
-    viewportRef.current = { zoom: 1, panX: 0, panY: 0 };
+    viewportRef.current = { zoom: 10, panX: -60, panY: -45 };
   };
 
   return (
