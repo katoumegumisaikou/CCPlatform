@@ -184,6 +184,28 @@ export default function AlarmsPage() {
     }
   };
 
+  const handleQuickStatusChange = async (record: Alarm, handleStatus: number) => {
+    try {
+      await alarmApi.handle(record.alarm_id, { handle_status: handleStatus });
+      const statusText = ALARM_HANDLE_MAP[handleStatus]?.text || '目标状态';
+      setAlarmData(prev => prev.map(item => (
+        item.alarm_id === record.alarm_id
+          ? { ...item, handle_status: handleStatus }
+          : item
+      )));
+      setDetailAlarm(prev => (
+        prev?.alarm_id === record.alarm_id
+          ? { ...prev, handle_status: handleStatus }
+          : prev
+      ));
+      message.success(`告警状态已更新为${statusText}`);
+      fetchAlarmData();
+      fetchAlarmStats();
+    } catch {
+      // error handled by interceptor
+    }
+  };
+
   const alarmColumns: ColumnsType<Alarm> = [
     {
       title: '告警ID',
@@ -260,12 +282,7 @@ export default function AlarmsPage() {
                 type="link"
                 size="small"
                 icon={<CheckCircleOutlined />}
-                onClick={() => {
-                  setHandlingAlarm(record);
-                  handleForm.resetFields();
-                  handleForm.setFieldsValue({ handle_status: 1 });
-                  setHandleModalVisible(true);
-                }}
+                onClick={() => handleQuickStatusChange(record, 1)}
               >
                 确认
               </Button>
@@ -273,12 +290,7 @@ export default function AlarmsPage() {
                 type="link"
                 size="small"
                 icon={<SyncOutlined />}
-                onClick={() => {
-                  setHandlingAlarm(record);
-                  handleForm.resetFields();
-                  handleForm.setFieldsValue({ handle_status: 2 });
-                  setHandleModalVisible(true);
-                }}
+                onClick={() => handleQuickStatusChange(record, 2)}
               >
                 处理中
               </Button>
@@ -287,7 +299,7 @@ export default function AlarmsPage() {
                 size="small"
                 style={{ color: 'green' }}
                 icon={<CheckCircleOutlined />}
-                onClick={() => handleOpenHandle(record)}
+                onClick={() => handleQuickStatusChange(record, 3)}
               >
                 完成
               </Button>
@@ -296,12 +308,7 @@ export default function AlarmsPage() {
                 size="small"
                 style={{ color: '#999' }}
                 icon={<StopOutlined />}
-                onClick={() => {
-                  setHandlingAlarm(record);
-                  handleForm.resetFields();
-                  handleForm.setFieldsValue({ handle_status: 4 });
-                  setHandleModalVisible(true);
-                }}
+                onClick={() => handleQuickStatusChange(record, 4)}
               >
                 忽略
               </Button>

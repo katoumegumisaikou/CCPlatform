@@ -59,7 +59,7 @@ func (r *AlarmRepo) List(page, size int, stationID, robotID string, alarmLevel, 
 }
 
 // Handle 处理告警，记录处理人和处理时间，更新处理状态。
-// status: 1已处理 2已忽略
+// status: 1已确认 2处理中 3已完成 4已忽略
 func (r *AlarmRepo) Handle(id string, handlerID string, status int8) error {
 	now := time.Now()
 	return r.db.Model(&model.Alarm{}).Where("alarm_id = ?", id).Updates(map[string]interface{}{
@@ -90,11 +90,11 @@ func (r *AlarmRepo) CountByLevel() (map[string]int64, error) {
 	for _, l := range levels {
 		switch l.Level {
 		case 1:
-			result["info"] = l.Count    // 提示级别
+			result["info"] = l.Count // 提示级别
 		case 2:
 			result["warning"] = l.Count // 一般告警
 		case 3:
-			result["error"] = l.Count   // 严重告警
+			result["error"] = l.Count // 严重告警
 		case 4:
 			result["critical"] = l.Count // 紧急告警
 		}

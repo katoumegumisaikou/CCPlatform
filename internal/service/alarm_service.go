@@ -36,7 +36,7 @@ func (s *AlarmService) List(page, size int, stationID, robotID string, alarmLeve
 	return s.repo.List(page, size, stationID, robotID, alarmLevel, handleStatus)
 }
 
-// Handle 处理告警，记录处理人和处理状态（1已处理/2已忽略）。
+// Handle 处理告警，记录处理人和处理状态（1已确认 2处理中 3已完成 4已忽略）。
 func (s *AlarmService) Handle(alarmID, handlerID string, status int8) error {
 	return s.repo.Handle(alarmID, handlerID, status)
 }

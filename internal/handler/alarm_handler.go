@@ -10,7 +10,6 @@ import (
 )
 
 // AlarmHandler 告警 HTTP 处理器，处理告警的查询、处理和统计。
-//
 type AlarmHandler struct {
 	svc *service.AlarmService
 }
@@ -52,7 +51,7 @@ func (h *AlarmHandler) GetByID(c *gin.Context) {
 
 // HandleAlarmRequest 处理告警请求体。
 type HandleAlarmRequest struct {
-	HandleStatus int8 `json:"handle_status" binding:"required"` // 处理状态(1已确认 2已处理 3已忽略)
+	HandleStatus int8 `json:"handle_status" binding:"required"` // 处理状态(1已确认 2处理中 3已完成 4已忽略)
 }
 
 // Handle 处理告警接口，记录处理人（从 JWT Token 中获取）和处理状态。
@@ -93,18 +92,18 @@ func (h *AlarmHandler) GetRecent(c *gin.Context) {
 		return
 	}
 	response.OK(c, alarms)
-	}
+}
 
-	// GetTrendAnalysis 告警趋势分析接口。
-	// GET /api/v1/alarms/trends?granularity=day&start_time=xx&end_time=xx
-	func (h *AlarmHandler) GetTrendAnalysis(c *gin.Context) {
-		granularity := c.DefaultQuery("granularity", "day")
-		startTime := c.Query("start_time")
-		endTime := c.Query("end_time")
-		data, err := h.svc.GetTrendAnalysis(granularity, startTime, endTime)
-		if err != nil {
-			response.Error(c, errcode.ErrInternal)
-			return
-		}
-		response.OK(c, data)
+// GetTrendAnalysis 告警趋势分析接口。
+// GET /api/v1/alarms/trends?granularity=day&start_time=xx&end_time=xx
+func (h *AlarmHandler) GetTrendAnalysis(c *gin.Context) {
+	granularity := c.DefaultQuery("granularity", "day")
+	startTime := c.Query("start_time")
+	endTime := c.Query("end_time")
+	data, err := h.svc.GetTrendAnalysis(granularity, startTime, endTime)
+	if err != nil {
+		response.Error(c, errcode.ErrInternal)
+		return
 	}
+	response.OK(c, data)
+}
