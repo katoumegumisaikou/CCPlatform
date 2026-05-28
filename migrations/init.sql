@@ -169,6 +169,8 @@ CREATE TABLE IF NOT EXISTS alarm_rules (
     rule_id VARCHAR(32) PRIMARY KEY,
     rule_name VARCHAR(100) NOT NULL COMMENT '规则名称',
     alarm_type VARCHAR(50) COMMENT '适用的告警类型',
+    scope_type VARCHAR(20) DEFAULT 'global' COMMENT '作用域:global/station/robot',
+    scope_id VARCHAR(32) COMMENT 'station_id或robot_id',
     threshold_value TEXT COMMENT '阈值配置(JSON)',
     escalation_rule TEXT COMMENT '升级规则(JSON)',
     suppression_rule TEXT COMMENT '抑制规则(JSON)',

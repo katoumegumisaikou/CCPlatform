@@ -86,7 +86,7 @@ lines.append("-- ====== 清理数据 ======")
 lines.append("SET FOREIGN_KEY_CHECKS = 0;")
 # 清理应用实际使用的表
 for t in ["cleaning_records", "robot_positions", "tasks", "robots", "stations",
-          "alarms", "audit_logs", "login_logs", "maintenance", "upgrade_records",
+          "alarms", "alarm_rules", "audit_logs", "login_logs", "maintenance", "upgrade_records",
           "device_credentials", "environment_data",
           "t_alarm", "t_alarm_event", "t_alarm_rule", "t_alarm_suppression",
           "t_clean_area", "t_clean_area_coverage", "t_clean_record",
@@ -201,6 +201,103 @@ for t in range(50):
         f"'{plan_start.strftime('%Y-%m-%d %H:%M:%S')}', "
         f"'{plan_end.strftime('%Y-%m-%d %H:%M:%S')}', "
         f"{actual_start}, {actual_end}, {ca}, {ws});"
+    )
+
+# ====== 告警规则 ======
+lines.append("\n-- ====== 告警规则 (5条) ======")
+alarm_rules = [
+    (
+        "AR-DEMO-001",
+        "电机过流升级规则",
+        "MOTOR_OVERLOAD",
+        "global",
+        "",
+        '{"current_amp":{"operator":">","value":18,"unit":"A"}}',
+        '[{"count":2,"within_min":15,"to_level":4}]',
+        '{"within_sec":300}',
+    ),
+    (
+        "AR-DEMO-002",
+        "通讯中断抑制规则",
+        "COMMUNICATION_LOST",
+        "station",
+        "ST0001",
+        '{"offline_sec":{"operator":">","value":300,"unit":"s"}}',
+        '[{"count":3,"within_min":30,"to_level":3}]',
+        '{"within_sec":600}',
+    ),
+    (
+        "AR-DEMO-003",
+        "传感器离线规则",
+        "SENSOR_OFFLINE",
+        "global",
+        "",
+        '{"missing_position_sec":{"operator":">","value":60,"unit":"s"}}',
+        '[{"count":2,"within_min":20,"to_level":3}]',
+        '{"within_sec":300}',
+    ),
+    (
+        "AR-DEMO-004",
+        "高温保护规则",
+        "HIGH_TEMPERATURE",
+        "robot",
+        "R1-0176",
+        '{"temperature":{"operator":">","value":40,"unit":"C"}}',
+        '[{"count":2,"within_min":10,"to_level":4}]',
+        '{"within_sec":180}',
+    ),
+    (
+        "AR-DEMO-005",
+        "OTA升级失败规则",
+        "OTA_FAILED",
+        "global",
+        "",
+        '{"retry_count":{"operator":">=","value":3,"unit":"times"}}',
+        '[{"count":1,"within_min":60,"to_level":3}]',
+        '{"within_sec":900}',
+    ),
+]
+
+for rule in alarm_rules:
+    rid, name, alarm_type, scope_type, scope_id, threshold, escalation, suppression = rule
+    lines.append(
+        "INSERT INTO alarm_rules (rule_id, rule_name, alarm_type, scope_type, scope_id, "
+        "threshold_value, escalation_rule, suppression_rule, status, create_time, update_time) VALUES "
+        f"('{rid}', '{name}', '{alarm_type}', '{scope_type}', '{scope_id}', "
+        f"'{threshold}', '{escalation}', '{suppression}', 1, NOW(), NOW()) "
+        "ON DUPLICATE KEY UPDATE rule_name = VALUES(rule_name), alarm_type = VALUES(alarm_type), "
+        "scope_type = VALUES(scope_type), scope_id = VALUES(scope_id), "
+        "threshold_value = VALUES(threshold_value), escalation_rule = VALUES(escalation_rule), "
+        "suppression_rule = VALUES(suppression_rule), status = VALUES(status), update_time = NOW();"
+    )
+
+# ====== 告警记录 ======
+lines.append("\n-- ====== 告警记录 (8条) ======")
+alarms = [
+    ("ALM-DEMO-001", 4, "MOTOR_OVERLOAD", "R1-0176", "ST0001", "固定式0176电机电流持续过高，已触发过流保护", "MINUTE", 15, 0, "NULL"),
+    ("ALM-DEMO-002", 3, "SENSOR_OFFLINE", "R3-0196", "ST0001", "全智能0196定位传感器离线，站内坐标更新中断", "MINUTE", 42, 0, "NULL"),
+    ("ALM-DEMO-003", 2, "COMMUNICATION_LOST", "R1-0002", "ST0002", "固定式0002心跳超过5分钟未恢复，请检查通讯链路", "HOUR", 2, 1, "NULL"),
+    ("ALM-DEMO-004", 3, "HIGH_TEMPERATURE", "R1-0176", "ST0001", "固定式0176机体温度达到42度，建议暂停清扫降温", "HOUR", 3, 2, "NULL"),
+    ("ALM-DEMO-005", 2, "BRUSH_STUCK", "R2-0236", "ST0001", "接驳车0236清扫刷阻力异常，疑似有异物卡滞", "HOUR", 5, 0, "NULL"),
+    ("ALM-DEMO-006", 1, "LOW_WATER_LEVEL", "R2-0271", "ST0001", "接驳车0271水箱余量偏低，请计划补水", "HOUR", 8, 3, "NOW() - INTERVAL 7 HOUR"),
+    ("ALM-DEMO-007", 3, "OTA_FAILED", "R3-0198", "ST0003", "全智能0198固件升级安装失败，已回滚到上一版本", "DAY", 1, 0, "NULL"),
+    ("ALM-DEMO-008", 2, "HIGH_WIND", "R2-0516", "ST0001", "现场风速偏高，建议暂停高处清扫作业", "DAY", 2, 4, "NOW() - INTERVAL 1 DAY"),
+]
+
+for alarm in alarms:
+    aid, level, alarm_type, robot_id, station_id, content, interval_unit, interval_value, status, handle_time = alarm
+    handler_id = "NULL" if status == 0 else "'admin01'"
+    lines.append(
+        "INSERT INTO alarms (alarm_id, alarm_level, alarm_type, robot_id, station_id, "
+        "alarm_content, alarm_time, handle_status, handle_time, handler_id, create_time) VALUES "
+        f"('{aid}', {level}, '{alarm_type}', '{robot_id}', '{station_id}', "
+        f"'{content}', NOW() - INTERVAL {interval_value} {interval_unit}, {status}, {handle_time}, "
+        f"{handler_id}, NOW()) "
+        "ON DUPLICATE KEY UPDATE alarm_level = VALUES(alarm_level), alarm_type = VALUES(alarm_type), "
+        "robot_id = VALUES(robot_id), station_id = VALUES(station_id), "
+        "alarm_content = VALUES(alarm_content), alarm_time = VALUES(alarm_time), "
+        "handle_status = VALUES(handle_status), handle_time = VALUES(handle_time), "
+        "handler_id = VALUES(handler_id);"
     )
 
 sql = "\n".join(lines)
