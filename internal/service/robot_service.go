@@ -35,17 +35,19 @@ var cmdEffects = map[string]cmdTaskEffect{
 
 // RobotService 机器人业务逻辑层，处理机器人的增删改查和远程控制。
 type RobotService struct {
-	repo      *repository.RobotRepo
-	taskRepo  *repository.TaskRepo
-	publisher *mqtt.Publisher
+	repo        *repository.RobotRepo
+	stationRepo *repository.StationRepo
+	taskRepo    *repository.TaskRepo
+	publisher   *mqtt.Publisher
 }
 
 // NewRobotService 创建 RobotService 实例，注入 MQTT Publisher 用于指令下发。
 func NewRobotService(publisher *mqtt.Publisher) *RobotService {
 	return &RobotService{
-		repo:      repository.NewRobotRepo(),
-		taskRepo:  repository.NewTaskRepo(),
-		publisher: publisher,
+		repo:        repository.NewRobotRepo(),
+		stationRepo: repository.NewStationRepo(),
+		taskRepo:    repository.NewTaskRepo(),
+		publisher:   publisher,
 	}
 }
 
@@ -55,9 +57,14 @@ func (s *RobotService) Create(robot *model.Robot) error {
 	return s.repo.Create(robot)
 }
 
-// GetByID 根据 ID 查询机器人详情。
+// GetByID 根据 ID 查询机器人详情，同时填充所属电站名称。
 func (s *RobotService) GetByID(id string) (*model.Robot, error) {
-	return s.repo.GetByID(id)
+	robot, err := s.repo.GetByID(id)
+	if err != nil {
+		return nil, err
+	}
+	s.fillStationNames([]*model.Robot{robot})
+	return robot, nil
 }
 
 // Update 更新机器人信息。
@@ -71,6 +78,7 @@ func (s *RobotService) Delete(id string) error {
 }
 
 // List 分页查询机器人列表，支持按电站、类型、在线状态筛选。
+// 查询后自动填充所属电站名称。
 func (s *RobotService) List(page, size int, stationID string, robotType, onlineStatus int) ([]model.Robot, int64, error) {
 	if page <= 0 {
 		page = 1
@@ -78,7 +86,17 @@ func (s *RobotService) List(page, size int, stationID string, robotType, onlineS
 	if size <= 0 {
 		size = 10
 	}
-	return s.repo.List(page, size, stationID, robotType, onlineStatus)
+	robots, total, err := s.repo.List(page, size, stationID, robotType, onlineStatus)
+	if err != nil {
+		return nil, 0, err
+	}
+	// 转换为指针切片以适配 fillStationNames
+	ptrs := make([]*model.Robot, len(robots))
+	for i := range robots {
+		ptrs[i] = &robots[i]
+	}
+	s.fillStationNames(ptrs)
+	return robots, total, nil
 }
 
 // SendCommand 向机器人下发控制指令。
@@ -137,9 +155,47 @@ func (s *RobotService) GetStats() (map[string]int64, error) {
 	return s.repo.CountByStatus()
 }
 
-// GetByStationID 查询指定电站下的所有机器人。
+// GetByStationID 查询指定电站下的所有机器人，同时填充所属电站名称。
 func (s *RobotService) GetByStationID(stationID string) ([]model.Robot, error) {
-	return s.repo.GetByStationID(stationID)
+	robots, err := s.repo.GetByStationID(stationID)
+	if err != nil {
+		return nil, err
+	}
+	ptrs := make([]*model.Robot, len(robots))
+	for i := range robots {
+		ptrs[i] = &robots[i]
+	}
+	s.fillStationNames(ptrs)
+	return robots, nil
+}
+
+// fillStationNames 根据机器人列表中的 StationID 批量查询电站名称并填充到 StationName 字段。
+// 使用 map 缓存避免重复查询，一次查询所有涉及的电站。
+func (s *RobotService) fillStationNames(robots []*model.Robot) {
+	if len(robots) == 0 {
+		return
+	}
+	// 收集所有需要查询的电站 ID（去重）
+	idSet := make(map[string]bool)
+	for _, r := range robots {
+		if r.StationID != "" {
+			idSet[r.StationID] = true
+		}
+	}
+	// 批量查询电站名称
+	nameMap := make(map[string]string, len(idSet))
+	for id := range idSet {
+		station, err := s.stationRepo.GetByID(id)
+		if err == nil {
+			nameMap[id] = station.StationName
+		}
+	}
+	// 填充 StationName
+	for _, r := range robots {
+		if name, ok := nameMap[r.StationID]; ok {
+			r.StationName = name
+		}
+	}
 }
 
 // AdvancedStats 设备高级统计数据。

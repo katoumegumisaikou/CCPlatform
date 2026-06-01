@@ -1,4 +1,7 @@
 import { useEffect, useRef, type CSSProperties } from 'react';
+import robotFixedImg from '../../assets/robot-fixed.png';
+import robotFerryImg from '../../assets/robot-ferry-correct.png';
+import robotSmartImg from '../../assets/robot-smart.png';
 
 interface SceneRobot {
   robot_id: string;
@@ -24,6 +27,21 @@ interface Robot2DSceneProps {
   footerLabel?: string;
   style?: CSSProperties;
 }
+
+// ---- image cache ----
+const robotImages: Record<number, HTMLImageElement> = {};
+(function preload() {
+  const srcMap: Record<number, string> = {
+    1: robotFixedImg,
+    2: robotFerryImg,
+    3: robotSmartImg,
+  };
+  for (const [type, src] of Object.entries(srcMap)) {
+    const img = new Image();
+    img.src = src;
+    robotImages[Number(type)] = img;
+  }
+})();
 
 const BACKGROUND_TOP = '#eaf6ff';
 const BACKGROUND_BOTTOM = '#f7f3df';
@@ -111,54 +129,58 @@ function drawRobotBody(
   energy: number,
 ) {
   ctx.save();
-  ctx.fillStyle = color;
-  ctx.strokeStyle = 'rgba(255,255,255,0.92)';
-  ctx.lineWidth = 2;
+  const img = robotImages[robotType];
+  if (img && img.complete && img.naturalWidth > 0) {
+    // 用真实图片替换矢量绘制
+    ctx.drawImage(img, -26, -26, 52, 52);
+  } else {
+    // fallback: 矢量绘制
+    ctx.fillStyle = color;
+    ctx.strokeStyle = 'rgba(255,255,255,0.92)';
+    ctx.lineWidth = 2;
 
-  if (robotType === 1) {
-    ctx.beginPath();
-    ctx.roundRect(-24, -12, 48, 24, 8);
-    ctx.fill();
-    ctx.stroke();
+    if (robotType === 1) {
+      ctx.beginPath();
+      ctx.roundRect(-24, -12, 48, 24, 8);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = 'rgba(255,255,255,0.24)';
+      ctx.fillRect(-14, -18, 28, 7);
+      ctx.fillStyle = '#cfd8dc';
+      ctx.fillRect(-30, 10, 60, 4);
+    } else if (robotType === 2) {
+      ctx.beginPath();
+      ctx.moveTo(-28, 0);
+      ctx.lineTo(-10, -18);
+      ctx.lineTo(16, -18);
+      ctx.lineTo(28, 0);
+      ctx.lineTo(12, 18);
+      ctx.lineTo(-18, 18);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = '#dde7ef';
+      ctx.fillRect(-36, 16, 72, 5);
+    } else {
+      ctx.beginPath();
+      ctx.arc(0, 0, 22, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = 'rgba(255,255,255,0.2)';
+      ctx.beginPath();
+      ctx.arc(0, 0, 10 + energy * 4, 0, Math.PI * 2);
+      ctx.fill();
+    }
 
-    ctx.fillStyle = 'rgba(255,255,255,0.24)';
-    ctx.fillRect(-14, -18, 28, 7);
-    ctx.fillStyle = '#cfd8dc';
-    ctx.fillRect(-30, 10, 60, 4);
-  } else if (robotType === 2) {
+    ctx.fillStyle = '#ffffff';
     ctx.beginPath();
-    ctx.moveTo(-28, 0);
-    ctx.lineTo(-10, -18);
-    ctx.lineTo(16, -18);
-    ctx.lineTo(28, 0);
-    ctx.lineTo(12, 18);
-    ctx.lineTo(-18, 18);
+    ctx.moveTo(8, 0);
+    ctx.lineTo(-6, -8);
+    ctx.lineTo(-2, 0);
+    ctx.lineTo(-6, 8);
     ctx.closePath();
     ctx.fill();
-    ctx.stroke();
-
-    ctx.fillStyle = '#dde7ef';
-    ctx.fillRect(-36, 16, 72, 5);
-  } else {
-    ctx.beginPath();
-    ctx.arc(0, 0, 22, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-
-    ctx.fillStyle = 'rgba(255,255,255,0.2)';
-    ctx.beginPath();
-    ctx.arc(0, 0, 10 + energy * 4, 0, Math.PI * 2);
-    ctx.fill();
   }
-
-  ctx.fillStyle = '#ffffff';
-  ctx.beginPath();
-  ctx.moveTo(8, 0);
-  ctx.lineTo(-6, -8);
-  ctx.lineTo(-2, 0);
-  ctx.lineTo(-6, 8);
-  ctx.closePath();
-  ctx.fill();
   ctx.restore();
 }
 

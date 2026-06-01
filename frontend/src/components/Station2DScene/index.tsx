@@ -1,4 +1,8 @@
 import { useEffect, useRef, type CSSProperties } from 'react';
+import robotFixedImg from '../../assets/robot-fixed.png';
+import robotFerryImg from '../../assets/robot-ferry-correct.png';
+import robotSmartImg from '../../assets/robot-smart.png';
+import pvBgImg from '../../assets/pv-bg.jpg';
 
 interface SceneRobot {
   robot_id: string;
@@ -52,6 +56,23 @@ const PANEL_CELL_H = 16;
 const PANEL_ORIGIN_X = 8;
 const PANEL_ORIGIN_Y = 6;
 
+// ---- image cache (preload on module level) ----
+const robotImages: Record<number, HTMLImageElement> = {};
+const bgImage = new Image();
+bgImage.src = pvBgImg;
+(function preload() {
+  const srcMap: Record<number, string> = {
+    1: robotFixedImg,
+    2: robotFerryImg,
+    3: robotSmartImg,
+  };
+  for (const [type, src] of Object.entries(srcMap)) {
+    const img = new Image();
+    img.src = src;
+    robotImages[Number(type)] = img;
+  }
+})();
+
 const STATUS_COLORS: Record<number, string> = {
   0: '#7d8792',
   1: '#1683ff',
@@ -101,14 +122,27 @@ function drawRobotLow(
   selected: boolean,
   batchSelected: boolean,
 ) {
-  const color = r.online_status === 1 ? (STATUS_COLORS[r.work_status] || STATUS_COLORS[0]) : '#aeb6bf';
-  ctx.beginPath();
-  ctx.arc(sx, sy, selected || batchSelected ? 6 : 4, 0, Math.PI * 2);
-  ctx.fillStyle = color;
-  ctx.fill();
+  const img = robotImages[r.robot_type];
+  if (img && img.complete && img.naturalWidth > 0) {
+    ctx.save();
+    ctx.translate(sx, sy);
+    const angle = (r.heading * Math.PI) / 180;
+    ctx.rotate(angle);
+    const size = 12;
+    ctx.drawImage(img, -size / 2, -size / 2, size, size);
+    ctx.restore();
+  } else {
+    const color = r.online_status === 1 ? (STATUS_COLORS[r.work_status] || STATUS_COLORS[0]) : '#aeb6bf';
+    ctx.beginPath();
+    ctx.arc(sx, sy, selected || batchSelected ? 6 : 4, 0, Math.PI * 2);
+    ctx.fillStyle = color;
+    ctx.fill();
+  }
   if (selected || batchSelected) {
     ctx.strokeStyle = selected ? '#1683ff' : '#f3a11b';
     ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(sx, sy, selected || batchSelected ? 6 : 4, 0, Math.PI * 2);
     ctx.stroke();
   }
 }
@@ -121,7 +155,7 @@ function drawRobotMid(
   selected: boolean,
   batchSelected: boolean,
 ) {
-  const color = r.online_status === 1 ? (STATUS_COLORS[r.work_status] || STATUS_COLORS[0]) : '#aeb6bf';
+  const img = robotImages[r.robot_type];
   const angle = (r.heading * Math.PI) / 180;
 
   ctx.save();
@@ -134,43 +168,25 @@ function drawRobotMid(
   ctx.ellipse(0, 16, 22, 6, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  // body
-  ctx.fillStyle = color;
-  ctx.strokeStyle = 'rgba(255,255,255,0.92)';
-  ctx.lineWidth = 2;
-
-  if (r.robot_type === 1) {
-    ctx.beginPath();
-    ctx.roundRect(-18, -8, 36, 16, 5);
-    ctx.fill();
-    ctx.stroke();
-  } else if (r.robot_type === 2) {
-    ctx.beginPath();
-    ctx.moveTo(-20, 0);
-    ctx.lineTo(-6, -12);
-    ctx.lineTo(13, -11);
-    ctx.lineTo(21, 0);
-    ctx.lineTo(11, 12);
-    ctx.lineTo(-13, 11);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
+  // robot image
+  if (img && img.complete && img.naturalWidth > 0) {
+    const size = 28;
+    ctx.drawImage(img, -size / 2, -size / 2, size, size);
   } else {
+    const color = r.online_status === 1 ? (STATUS_COLORS[r.work_status] || STATUS_COLORS[0]) : '#aeb6bf';
+    ctx.fillStyle = color;
     ctx.beginPath();
     ctx.arc(0, 0, 14, 0, Math.PI * 2);
     ctx.fill();
-    ctx.stroke();
   }
 
-  // direction indicator
-  ctx.fillStyle = '#fff';
-  ctx.beginPath();
-  ctx.moveTo(7, 0);
-  ctx.lineTo(-3, -5);
-  ctx.lineTo(-1, 0);
-  ctx.lineTo(-3, 5);
-  ctx.closePath();
-  ctx.fill();
+  // offline overlay
+  if (r.online_status === 0) {
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.beginPath();
+    ctx.arc(0, 0, 16, 0, Math.PI * 2);
+    ctx.fill();
+  }
 
   ctx.restore();
 
@@ -198,7 +214,7 @@ function drawRobotHigh(
   selected: boolean,
   batchSelected: boolean,
 ) {
-  const color = r.online_status === 1 ? (STATUS_COLORS[r.work_status] || STATUS_COLORS[0]) : '#aeb6bf';
+  const img = robotImages[r.robot_type];
   const angle = (r.heading * Math.PI) / 180;
 
   ctx.save();
@@ -211,45 +227,25 @@ function drawRobotHigh(
   ctx.ellipse(0, 22, 28, 8, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  // body
-  ctx.fillStyle = color;
-  ctx.strokeStyle = 'rgba(255,255,255,0.92)';
-  ctx.lineWidth = 2;
-
-  if (r.robot_type === 1) {
-    ctx.beginPath();
-    ctx.roundRect(-22, -10, 44, 20, 7);
-    ctx.fill();
-    ctx.stroke();
-    ctx.fillStyle = '#dce6ef';
-    ctx.fillRect(-27, 10, 54, 4);
-  } else if (r.robot_type === 2) {
-    ctx.beginPath();
-    ctx.moveTo(-25, 0);
-    ctx.lineTo(-8, -16);
-    ctx.lineTo(17, -15);
-    ctx.lineTo(27, 0);
-    ctx.lineTo(14, 16);
-    ctx.lineTo(-17, 15);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
+  // robot image
+  if (img && img.complete && img.naturalWidth > 0) {
+    const size = 46;
+    ctx.drawImage(img, -size / 2, -size / 2, size, size);
   } else {
+    const color = r.online_status === 1 ? (STATUS_COLORS[r.work_status] || STATUS_COLORS[0]) : '#aeb6bf';
+    ctx.fillStyle = color;
     ctx.beginPath();
     ctx.arc(0, 0, 18, 0, Math.PI * 2);
     ctx.fill();
-    ctx.stroke();
   }
 
-  // direction arrow
-  ctx.fillStyle = '#fff';
-  ctx.beginPath();
-  ctx.moveTo(9, 0);
-  ctx.lineTo(-4, -7);
-  ctx.lineTo(-1, 0);
-  ctx.lineTo(-4, 7);
-  ctx.closePath();
-  ctx.fill();
+  // offline overlay
+  if (r.online_status === 0) {
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.beginPath();
+    ctx.arc(0, 0, 24, 0, Math.PI * 2);
+    ctx.fill();
+  }
 
   // work status sweep
   if (r.work_status === 1 && r.online_status === 1) {
@@ -382,12 +378,16 @@ export default function Station2DScene({
       }
       lastRenderTimeRef.current = time;
 
-      // background
-      const gradient = ctx.createLinearGradient(0, 0, 0, ch);
-      gradient.addColorStop(0, '#eaf7ff');
-      gradient.addColorStop(1, '#f6f8ed');
-      ctx.fillStyle = gradient;
-      ctx.fillRect(0, 0, cw, ch);
+      // background — pv-bg.jpg 铺满画布
+      if (bgImage.complete && bgImage.naturalWidth > 0) {
+        ctx.drawImage(bgImage, 0, 0, cw, ch);
+      } else {
+        const gradient = ctx.createLinearGradient(0, 0, 0, ch);
+        gradient.addColorStop(0, '#eaf7ff');
+        gradient.addColorStop(1, '#f6f8ed');
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, cw, ch);
+      }
 
       // grid lines (world space)
       for (let gx = WORLD_BOUNDS.minX; gx <= WORLD_BOUNDS.maxX; gx += 10) {

@@ -105,7 +105,7 @@ interface MockCommandState {
 
 function toRobotMarker(r: RobotRealtime) {
   return {
-    robot_id: r.robot_id, robot_name: r.robot_name,
+    robot_id: r.robot_id, robot_name: r.robot_name, robot_type: r.robot_type,
     pos_x: r.pos_x, pos_y: r.pos_y, heading: r.heading,
     online_status: r.online_status, work_status: r.work_status,
     battery_level: r.battery_level,

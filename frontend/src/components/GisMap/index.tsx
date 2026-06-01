@@ -1,6 +1,9 @@
 import { useEffect, useRef } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import robotFixedImg from '../../assets/robot-fixed.png';
+import robotFerryImg from '../../assets/robot-ferry-correct.png';
+import robotSmartImg from '../../assets/robot-smart.png';
 
 delete (L.Icon.Default.prototype as unknown as Record<string, unknown>)._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -19,6 +22,7 @@ interface StationMarker {
 interface RobotMarker {
   robot_id: string;
   robot_name: string;
+  robot_type: number;
   pos_x: number;   // longitude
   pos_y: number;   // latitude
   heading: number;
@@ -45,6 +49,21 @@ const WORK_STATUS_COLORS: Record<number, string> = {
   3: '#ff4d4f',
   4: '#722ed1',
 };
+
+// ---- image cache ----
+const robotImages: Record<number, HTMLImageElement> = {};
+(function preload() {
+  const srcMap: Record<number, string> = {
+    1: robotFixedImg,
+    2: robotFerryImg,
+    3: robotSmartImg,
+  };
+  for (const [type, src] of Object.entries(srcMap)) {
+    const img = new Image();
+    img.src = src;
+    robotImages[Number(type)] = img;
+  }
+})();
 
 // ---- Canvas overlay implementation ----
 
@@ -145,13 +164,24 @@ class RobotCanvasLayer {
       const color = r.online_status === 0 ? '#d9d9d9' : (WORK_STATUS_COLORS[r.work_status] || '#8c8c8c');
       const angle = (r.heading * Math.PI) / 180;
 
-      // LOD based on zoom
+      // LOD based on zoom — use PNG images
+      const img = robotImages[r.robot_type];
+      const hasImg = img && img.complete && img.naturalWidth > 0;
+
       if (zoom < 13) {
-        // Small dot only
-        ctx.beginPath();
-        ctx.arc(sx, sy, 3, 0, Math.PI * 2);
-        ctx.fillStyle = color;
-        ctx.fill();
+        // Small dot or tiny image
+        if (hasImg) {
+          ctx.save();
+          ctx.translate(sx, sy);
+          ctx.rotate(angle);
+          ctx.drawImage(img, -6, -6, 12, 12);
+          ctx.restore();
+        } else {
+          ctx.beginPath();
+          ctx.arc(sx, sy, 3, 0, Math.PI * 2);
+          ctx.fillStyle = color;
+          ctx.fill();
+        }
         if (isSelected || isBatchSelected) {
           ctx.beginPath();
           ctx.arc(sx, sy, 5, 0, Math.PI * 2);
@@ -160,27 +190,31 @@ class RobotCanvasLayer {
           ctx.stroke();
         }
       } else if (zoom < 16) {
-        // Dot + short arrow
-        ctx.save();
-        ctx.translate(sx, sy);
-        ctx.rotate(angle);
-
-        ctx.beginPath();
-        ctx.arc(0, 0, 5, 0, Math.PI * 2);
-        ctx.fillStyle = color;
-        ctx.fill();
-
-        ctx.fillStyle = '#fff';
-        ctx.beginPath();
-        ctx.moveTo(4, 0);
-        ctx.lineTo(-2, -3);
-        ctx.lineTo(0, 0);
-        ctx.lineTo(-2, 3);
-        ctx.closePath();
-        ctx.fill();
-
-        ctx.restore();
-
+        // Medium image with rotation
+        if (hasImg) {
+          ctx.save();
+          ctx.translate(sx, sy);
+          ctx.rotate(angle);
+          ctx.drawImage(img, -10, -10, 20, 20);
+          ctx.restore();
+        } else {
+          ctx.save();
+          ctx.translate(sx, sy);
+          ctx.rotate(angle);
+          ctx.beginPath();
+          ctx.arc(0, 0, 5, 0, Math.PI * 2);
+          ctx.fillStyle = color;
+          ctx.fill();
+          ctx.fillStyle = '#fff';
+          ctx.beginPath();
+          ctx.moveTo(4, 0);
+          ctx.lineTo(-2, -3);
+          ctx.lineTo(0, 0);
+          ctx.lineTo(-2, 3);
+          ctx.closePath();
+          ctx.fill();
+          ctx.restore();
+        }
         if (isSelected || isBatchSelected) {
           ctx.beginPath();
           ctx.arc(sx, sy, 8, 0, Math.PI * 2);
@@ -189,26 +223,31 @@ class RobotCanvasLayer {
           ctx.stroke();
         }
       } else {
-        // Dot + arrow + name + battery
-        ctx.save();
-        ctx.translate(sx, sy);
-        ctx.rotate(angle);
-
-        ctx.beginPath();
-        ctx.arc(0, 0, 6, 0, Math.PI * 2);
-        ctx.fillStyle = color;
-        ctx.fill();
-
-        ctx.fillStyle = '#fff';
-        ctx.beginPath();
-        ctx.moveTo(5, 0);
-        ctx.lineTo(-3, -4);
-        ctx.lineTo(0, 0);
-        ctx.lineTo(-3, 4);
-        ctx.closePath();
-        ctx.fill();
-
-        ctx.restore();
+        // Large image with name + battery
+        if (hasImg) {
+          ctx.save();
+          ctx.translate(sx, sy);
+          ctx.rotate(angle);
+          ctx.drawImage(img, -18, -18, 36, 36);
+          ctx.restore();
+        } else {
+          ctx.save();
+          ctx.translate(sx, sy);
+          ctx.rotate(angle);
+          ctx.beginPath();
+          ctx.arc(0, 0, 6, 0, Math.PI * 2);
+          ctx.fillStyle = color;
+          ctx.fill();
+          ctx.fillStyle = '#fff';
+          ctx.beginPath();
+          ctx.moveTo(5, 0);
+          ctx.lineTo(-3, -4);
+          ctx.lineTo(0, 0);
+          ctx.lineTo(-3, 4);
+          ctx.closePath();
+          ctx.fill();
+          ctx.restore();
+        }
 
         if (isSelected || isBatchSelected) {
           ctx.beginPath();

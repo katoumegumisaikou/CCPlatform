@@ -11,6 +11,7 @@ type Robot struct {
 	RobotName      string    `gorm:"type:varchar(100)" json:"robot_name"`                      // 机器人名称
 	RobotType      int8      `gorm:"type:tinyint;not null" json:"robot_type"`                  // 类型: 1固定式 2接驳车 3全智能
 	StationID      string    `gorm:"type:varchar(32);index" json:"station_id"`                 // 所属电站 ID
+	StationName    string    `gorm:"-" json:"station_name"`                                   // 所属电站名称（非持久化，Service 层填充）
 	PosX           float64   `gorm:"type:decimal(10,3)" json:"pos_x"`                          // X 坐标 (m)，由 MQTT position 消息更新
 	PosY           float64   `gorm:"type:decimal(10,3)" json:"pos_y"`                          // Y 坐标 (m)
 	PosZ           float64   `gorm:"type:decimal(10,3)" json:"pos_z"`                          // Z 坐标 (m)
