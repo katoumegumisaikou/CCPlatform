@@ -46,15 +46,18 @@ interface Rect {
   maxY: number;
 }
 
-const WORLD_BOUNDS = { minX: 0, maxX: 120, minY: 0, maxY: 90 };
+const WORLD_BOUNDS = { minX: 0, maxX: 120, minY: 0, maxY: 67 };
 const ZOOM_MIN = 0.4;
 const ZOOM_MAX = 20;
+// 面板阵列参数对齐 pv-bg.jpg 图片布局 (1376×768 ≈ 1.79:1)
+// 5 行光伏板，每行 6 列，行间距中包含接驳车通道
 const PANEL_COLS = 6;
 const PANEL_ROWS = 5;
-const PANEL_CELL_W = 18;
-const PANEL_CELL_H = 16;
-const PANEL_ORIGIN_X = 8;
-const PANEL_ORIGIN_Y = 6;
+const PANEL_CELL_W = 17;
+const PANEL_CELL_H = 11;
+const PANEL_ORIGIN_X = 9;
+const PANEL_ORIGIN_Y = 5;
+const PANEL_GAP_Y = 13.6; // 行间距（面板顶部到下一行面板顶部）
 
 // ---- image cache (preload on module level) ----
 const robotImages: Record<number, HTMLImageElement> = {};
@@ -72,6 +75,44 @@ bgImage.src = pvBgImg;
     robotImages[Number(type)] = img;
   }
 })();
+
+// ---- 清扫轨迹追踪：记录每块光伏板被机器人清扫过的程度 ----
+const cleaningTrail = new Map<string, number>(); // key: "col,row" → 0..1
+const CLEAN_DECAY = 0.9995; // 清扫痕迹渐隐速度
+const CLEAN_SPEED = 0.015;  // 机器人经过时清扫进度增速
+
+function getPanelCell(wx: number, wy: number): { col: number; row: number } | null {
+  const col = Math.floor((wx - PANEL_ORIGIN_X) / PANEL_CELL_W);
+  const row = Math.floor((wy - PANEL_ORIGIN_Y) / PANEL_GAP_Y);
+  if (col < 0 || col >= PANEL_COLS || row < 0 || row >= PANEL_ROWS) return null;
+  return { col, row };
+}
+
+function updateCleaningTrail(robots: SceneRobot[], dt: number) {
+  // 渐隐所有清扫痕迹
+  for (const [key, val] of cleaningTrail) {
+    const newVal = val * Math.pow(CLEAN_DECAY, dt * 60);
+    if (newVal < 0.01) cleaningTrail.delete(key);
+    else cleaningTrail.set(key, newVal);
+  }
+  // 机器人当前位置增加清扫进度
+  for (const r of robots) {
+    if (r.work_status !== 1 || r.online_status !== 1) continue;
+    // 机器人周围的面板都标记为清扫中
+    for (let dx = -3; dx <= 3; dx += 3) {
+      const cell = getPanelCell(r.pos_x + dx, r.pos_y);
+      if (cell) {
+        const key = `${cell.col},${cell.row}`;
+        const cur = cleaningTrail.get(key) || 0;
+        cleaningTrail.set(key, Math.min(1, cur + CLEAN_SPEED));
+      }
+    }
+  }
+}
+
+function getCleaningLevel(col: number, row: number): number {
+  return cleaningTrail.get(`${col},${row}`) || 0;
+}
 
 const STATUS_COLORS: Record<number, string> = {
   0: '#7d8792',
@@ -325,7 +366,7 @@ export default function Station2DScene({
   const selectedRobotIdsRef = useRef(selectedRobotIds);
   const onRobotSelectRef = useRef(onRobotSelect);
   const onSelectionChangeRef = useRef(onSelectionChange);
-  const viewportRef = useRef<Viewport>({ zoom: 10, panX: -60, panY: -45 });
+  const viewportRef = useRef<Viewport>({ zoom: 10, panX: -60, panY: -33.5 });
   const visibleRobotsRef = useRef<Array<{ robotId: string; sx: number; sy: number; robot: SceneRobot }>>([]);
   const pointerStateRef = useRef<{
     mode: 'idle' | 'panning' | 'selecting' | 'dragging-robot';
@@ -411,23 +452,51 @@ export default function Station2DScene({
         ctx.stroke();
       }
 
-      // panel arrays (world space)
+      // panel arrays (world space) — 半透明叠加在背景图之上
+      // 面板是机器人清扫的目标区域，图片已展示真实面板，代码绘制透明遮罩
       const visibleRect = getVisibleWorldRect(vp, cw, ch);
       for (let pr = 0; pr < PANEL_ROWS; pr++) {
         for (let pc = 0; pc < PANEL_COLS; pc++) {
           const px = PANEL_ORIGIN_X + pc * PANEL_CELL_W;
-          const py = PANEL_ORIGIN_Y + pr * PANEL_CELL_H;
+          const py = PANEL_ORIGIN_Y + pr * PANEL_GAP_Y;
           if (px + PANEL_CELL_W < visibleRect.minX || px > visibleRect.maxX ||
               py + PANEL_CELL_H < visibleRect.minY || py > visibleRect.maxY) continue;
           const s = worldToScreen(px, py, vp, cw, ch);
           const e = worldToScreen(px + PANEL_CELL_W, py + PANEL_CELL_H, vp, cw, ch);
-          ctx.fillStyle = '#214b76';
-          ctx.strokeStyle = '#8bd3ff';
-          ctx.lineWidth = 1;
+          const cleaned = getCleaningLevel(pc, pr);
+
+          // 面板底色：半透明深蓝，已清扫区域渐变到绿色
+          if (cleaned > 0.01) {
+            const r = Math.round(33 * (1 - cleaned) + 34 * cleaned);
+            const g = Math.round(75 * (1 - cleaned) + 197 * cleaned);
+            const b = Math.round(118 * (1 - cleaned) + 118 * cleaned);
+            ctx.fillStyle = `rgba(${r},${g},${b},${0.25 + cleaned * 0.35})`;
+          } else {
+            ctx.fillStyle = 'rgba(33,75,118,0.18)';
+          }
           ctx.fillRect(s.x, s.y, e.x - s.x, e.y - s.y);
+
+          // 面板边框
+          ctx.strokeStyle = cleaned > 0.3
+            ? `rgba(52,199,89,${0.3 + cleaned * 0.4})`
+            : 'rgba(139,211,255,0.35)';
+          ctx.lineWidth = 1;
           ctx.strokeRect(s.x, s.y, e.x - s.x, e.y - s.y);
+
+          // 清扫进度条（高缩放时显示）
+          if (cleaned > 0.01 && vp.zoom > 2) {
+            const barH = Math.max(2, (e.y - s.y) * 0.08);
+            const barY = s.y + (e.y - s.y) * 0.85;
+            ctx.fillStyle = 'rgba(0,0,0,0.2)';
+            ctx.fillRect(s.x + 2, barY, e.x - s.x - 4, barH);
+            ctx.fillStyle = '#34c759';
+            ctx.fillRect(s.x + 2, barY, (e.x - s.x - 4) * cleaned, barH);
+          }
         }
       }
+
+      // 更新清扫轨迹：机器人经过的面板变色
+      updateCleaningTrail(currentRobots, frameInterval / 1000);
 
       // robots
       const visible: Array<{ robotId: string; sx: number; sy: number; robot: SceneRobot }> = [];
@@ -624,7 +693,7 @@ export default function Station2DScene({
 
   const handleDoubleClick = (_e: React.MouseEvent<HTMLCanvasElement>) => {
     // reset view
-    viewportRef.current = { zoom: 10, panX: -60, panY: -45 };
+    viewportRef.current = { zoom: 10, panX: -60, panY: -33.5 };
   };
 
   return (

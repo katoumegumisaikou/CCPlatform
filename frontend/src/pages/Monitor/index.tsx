@@ -87,7 +87,7 @@ const MOCK_STATION: Station = {
 };
 
 const MOCK_ROBOT_COUNT = 30;
-const MOCK_WORLD_BOUNDS = { minX: 0, maxX: 120, minY: 0, maxY: 90 };
+const MOCK_WORLD_BOUNDS = { minX: 0, maxX: 120, minY: 0, maxY: 67 };
 const MOCK_BASE_POINT = { x: 6, y: 8 };
 
 type MockCommandMode = 'running' | 'stopped' | 'returning' | 'resetting';
@@ -154,43 +154,53 @@ interface MockRobotSeed {
 }
 
 function makeMockRobotSeed(index: number): MockRobotSeed {
-  // 10 固定式 (index 0-9): 单排在光伏板阵列顶部
+  // 面板行参数（对齐 Station2DScene PANEL_ORIGIN_Y=5, PANEL_GAP_Y=13.6, PANEL_CELL_H=11）
+  const panelRowCenters = [0, 1, 2, 3, 4].map(r => 5 + r * 13.6 + 11 / 2); // Y中心: 10.5, 24.1, 37.7, 51.3, 64.9
+  // 列间通道 X 坐标（面板列宽17, 列间隙约0.3, 通道在列之间）
+  const panelColGaps = [9 + 17 * 0, 9 + 17 * 1, 9 + 17 * 2, 9 + 17 * 3, 9 + 17 * 4, 9 + 17 * 5, 9 + 17 * 6];
+
+  // 10 固定式 (index 0-9): 每2台一组分布在5行面板上，沿面板行X轴清扫
   if (index < 10) {
     const i = index;
-    const minX = 12;
-    const maxX = 108;
+    const row = i % 5; // 5行面板，每行2台
+    const col = Math.floor(i / 5); // 0或1
+    const minX = panelColGaps[0] + 3;
+    const maxX = panelColGaps[panelColGaps.length - 1] - 3;
     return {
       robotId: `mock-fixed-${String(i + 1).padStart(3, '0')}`,
       robotName: `固定式${String(i + 1).padStart(3, '0')}`,
       robotType: 1,
-      initX: minX + (i / 9) * (maxX - minX),
-      initY: 12,
+      initX: col === 0 ? minX + (maxX - minX) * 0.25 : minX + (maxX - minX) * 0.75,
+      initY: panelRowCenters[row],
       phase: i * 0.35,
       batteryBase: 82 + (i % 18),
     };
   }
-  // 10 接驳车 (index 10-19): 在光伏板列间通道
+  // 10 接驳车 (index 10-19): 在面板列间通道沿Y轴穿行
   if (index < 20) {
     const i = index - 10;
-    const laneXs = [26, 44, 62, 80, 98];
+    // 使用列间隙作为通道（跳过首尾，用中间5个通道）
+    const chXs = [panelColGaps[1], panelColGaps[2], panelColGaps[3], panelColGaps[4], panelColGaps[5]];
+    // 每2台共享一个通道，分布在面板区顶部和底部
+    const chIdx = Math.floor(i / 2) % chXs.length;
     return {
       robotId: `mock-shuttle-${String(i + 1).padStart(3, '0')}`,
       robotName: `接驳车${String(i + 1).padStart(3, '0')}`,
       robotType: 2,
-      initX: laneXs[i % laneXs.length],
-      initY: 12 + Math.floor(i / laneXs.length) * 34,
+      initX: chXs[chIdx] - 1,
+      initY: i % 2 === 0 ? 7 : 62, // 顶部和底部
       phase: i * 0.45,
       batteryBase: 78 + (i % 22),
     };
   }
-  // 10 全智能 (index 20-29): 中央区域自由分布
+  // 10 全智能 (index 20-29): 全区域自由巡航
   const i = index - 20;
   return {
     robotId: `mock-smart-${String(i + 1).padStart(3, '0')}`,
     robotName: `全智能${String(i + 1).padStart(3, '0')}`,
     robotType: 3,
-    initX: 30 + (i % 5) * 15,
-    initY: 34 + Math.floor(i / 5) * 18,
+    initX: 25 + (i % 5) * 16,
+    initY: 12 + Math.floor(i / 5) * 15,
     phase: i * 0.62,
     batteryBase: 72 + (i % 28),
   };
@@ -239,30 +249,30 @@ function makeMockRobot(
     speed = 0.85;
     workStatus = progress >= 1 ? 2 : 1;
   } else if (seed.robotType === 1) {
-    // 固定式：X 轴往复清扫，Y 固定
+    // 固定式：严格沿面板行 X 轴往复清扫，Y 锁定在面板行中心
     const wave = Math.sin(t * 0.72 + seed.phase);
     heading = Math.cos(t * 0.72 + seed.phase) >= 0 ? 90 : 270;
-    posX = clamp(seed.initX + wave * 8, 8, 112);
-    posY = seed.initY;
+    posX = clamp(seed.initX + wave * 20, 12, 108);
+    posY = seed.initY; // 锁定面板行，不偏离
     speed = 0.75;
   } else if (seed.robotType === 2) {
-    // 接驳车：Y 轴上下穿行于列间通道，X 基本不变
+    // 接驳车：Y 轴上下穿行于面板列间通道，X 锁定在通道
     const wave = Math.sin(t * 0.55 + seed.phase);
     heading = Math.cos(t * 0.55 + seed.phase) >= 0 ? 180 : 0;
     posX = seed.initX;
-    posY = clamp(seed.initY + wave * 28, 8, 82);
+    posY = clamp(seed.initY + wave * 26, 7, 62);
     speed = 1.05;
   } else {
-    // 全智能：Lissajous 自由巡航
-    const ax = 18;
-    const ay = 14;
+    // 全智能：Lissajous 自由巡航，以整个面板区为边界
+    const ax = 35;
+    const ay = 28;
     const xPhase = t * 0.42 + seed.phase;
     const yPhase = t * 0.31 + seed.phase * 1.3;
-    posX = clamp(seed.initX + Math.sin(xPhase) * ax + Math.sin(t * 0.17 + seed.phase) * 4, 8, 112);
-    posY = clamp(seed.initY + Math.sin(yPhase) * ay, 8, 82);
+    posX = clamp(seed.initX + Math.sin(xPhase) * ax + Math.sin(t * 0.17 + seed.phase) * 6, 9, 111);
+    posY = clamp(seed.initY + Math.sin(yPhase) * ay, 5, 65);
     // 用 t+0.1 近似计算朝向
-    const nextX = clamp(seed.initX + Math.sin((t + 0.1) * 0.42 + seed.phase) * ax + Math.sin((t + 0.1) * 0.17 + seed.phase) * 4, 8, 112);
-    const nextY = clamp(seed.initY + Math.sin((t + 0.1) * 0.31 + seed.phase * 1.3) * ay, 8, 82);
+    const nextX = clamp(seed.initX + Math.sin((t + 0.1) * 0.42 + seed.phase) * ax + Math.sin((t + 0.1) * 0.17 + seed.phase) * 6, 9, 111);
+    const nextY = clamp(seed.initY + Math.sin((t + 0.1) * 0.31 + seed.phase * 1.3) * ay, 5, 65);
     heading = (Math.atan2(nextX - posX, nextY - posY) * 180) / Math.PI;
     speed = 0.68 + Math.sin(t * 0.21) * 0.22;
     workStatus = tick % 70 > 60 ? 2 : 1;
