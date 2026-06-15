@@ -37,7 +37,10 @@ go.work.sum
 
 *.docx
 
+# 忽略 agent 配置
 CLAUDE.md
+AGENTS.md 
+
 进度汇报-2026-05-23.md
 TODO.md
 .codex/
