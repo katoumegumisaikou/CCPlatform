@@ -419,15 +419,18 @@ export default function Station2DScene({
       }
       lastRenderTimeRef.current = time;
 
-      // background — pv-bg.jpg 铺满画布
+      // 底色（世界边界外的区域）
+      const gradient = ctx.createLinearGradient(0, 0, 0, ch);
+      gradient.addColorStop(0, '#eaf7ff');
+      gradient.addColorStop(1, '#f6f8ed');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, cw, ch);
+
+      // pv-bg.jpg 映射到世界坐标，随缩放/平移变化
       if (bgImage.complete && bgImage.naturalWidth > 0) {
-        ctx.drawImage(bgImage, 0, 0, cw, ch);
-      } else {
-        const gradient = ctx.createLinearGradient(0, 0, 0, ch);
-        gradient.addColorStop(0, '#eaf7ff');
-        gradient.addColorStop(1, '#f6f8ed');
-        ctx.fillStyle = gradient;
-        ctx.fillRect(0, 0, cw, ch);
+        const tl = worldToScreen(WORLD_BOUNDS.minX, WORLD_BOUNDS.minY, vp, cw, ch);
+        const br = worldToScreen(WORLD_BOUNDS.maxX, WORLD_BOUNDS.maxY, vp, cw, ch);
+        ctx.drawImage(bgImage, tl.x, tl.y, br.x - tl.x, br.y - tl.y);
       }
 
       // grid lines (world space)
