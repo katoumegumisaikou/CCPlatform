@@ -14,6 +14,7 @@ import (
 type Config struct {
 	Server   ServerConfig   `mapstructure:"server"`   // HTTP 服务器配置
 	Database DatabaseConfig `mapstructure:"database"` // MySQL 数据库配置
+	InfluxDB InfluxDBConfig `mapstructure:"influxdb"` // InfluxDB 时序数据库配置
 	MQTT     MQTTConfig     `mapstructure:"mqtt"`     // MQTT Broker 配置
 	JWT      JWTConfig      `mapstructure:"jwt"`      // JWT 认证配置
 	Log      LogConfig      `mapstructure:"log"`      // 日志配置
@@ -21,6 +22,15 @@ type Config struct {
 	OTA      OTAConfig      `mapstructure:"ota"`      // OTA 固件升级配置
 	Backup   BackupConfig   `mapstructure:"backup"`   // 数据备份配置
 	Video    VideoConfig    `mapstructure:"video"`    // 视频监控配置
+}
+
+// InfluxDBConfig InfluxDB v2 写入配置，用于存储 MQTT 采集到的时序数据。
+type InfluxDBConfig struct {
+	Enabled bool   `mapstructure:"enabled"`
+	URL     string `mapstructure:"url"`
+	Token   string `mapstructure:"token"`
+	Org     string `mapstructure:"org"`
+	Bucket  string `mapstructure:"bucket"`
 }
 
 // ServerConfig HTTP 服务器配置。
@@ -31,12 +41,12 @@ type ServerConfig struct {
 
 // DatabaseConfig MySQL 数据库配置。
 type DatabaseConfig struct {
-	Host         string `mapstructure:"host"`          // 数据库主机地址
-	Port         int    `mapstructure:"port"`          // 数据库端口
-	User         string `mapstructure:"user"`          // 用户名
-	Password     string `mapstructure:"password"`      // 密码
-	DBName       string `mapstructure:"dbname"`        // 数据库名
-	Charset      string `mapstructure:"charset"`       // 字符集，默认 utf8mb4
+	Host         string `mapstructure:"host"`           // 数据库主机地址
+	Port         int    `mapstructure:"port"`           // 数据库端口
+	User         string `mapstructure:"user"`           // 用户名
+	Password     string `mapstructure:"password"`       // 密码
+	DBName       string `mapstructure:"dbname"`         // 数据库名
+	Charset      string `mapstructure:"charset"`        // 字符集，默认 utf8mb4
 	MaxIdleConns int    `mapstructure:"max_idle_conns"` // 最大空闲连接数
 	MaxOpenConns int    `mapstructure:"max_open_conns"` // 最大打开连接数
 }
@@ -49,8 +59,8 @@ func (d DatabaseConfig) DSN() string {
 
 // MQTTConfig MQTT Broker 配置。
 type MQTTConfig struct {
-	Port   int `mapstructure:"port"`     // MQTT TCP 端口，默认 1883
-	WSPort int `mapstructure:"ws_port"`  // MQTT WebSocket 端口，默认 8083
+	Port   int `mapstructure:"port"`    // MQTT TCP 端口，默认 1883
+	WSPort int `mapstructure:"ws_port"` // MQTT WebSocket 端口，默认 8083
 }
 
 // JWTConfig JWT 认证配置。
@@ -71,7 +81,7 @@ type LogConfig struct {
 // NotifyConfig 通知渠道配置，包括短信/邮件/APP推送的 API 密钥和模板。
 type NotifyConfig struct {
 	SMS struct {
-		Provider  string `mapstructure:"provider"`  // 短信服务商: aliyun/tencent
+		Provider  string `mapstructure:"provider"`   // 短信服务商: aliyun/tencent
 		AccessKey string `mapstructure:"access_key"` // API 访问密钥
 		SecretKey string `mapstructure:"secret_key"` // API 密钥
 		SignName  string `mapstructure:"sign_name"`  // 短信签名

@@ -10,12 +10,12 @@
 //  7. 创建 MQTT Publisher，用于下发控制指令到机器人
 //  8. 启动周期任务调度器，用于定时/周期清扫任务
 //  9. 注册所有 HTTP 路由（REST API）
+//
 // 10. 启动 HTTP Server
 // 11. 等待信号，按序优雅关闭：HTTP → WebSocket → Scheduler → MQTT → DB
 package main
 
 import (
-	"context"
 	"ccplatform/internal/config"
 	"ccplatform/internal/mqtt"
 	"ccplatform/internal/repository"
@@ -23,6 +23,7 @@ import (
 	"ccplatform/internal/scheduler"
 	"ccplatform/internal/service"
 	"ccplatform/internal/ws"
+	"context"
 	"fmt"
 	"log"
 	"net/http"
@@ -62,6 +63,11 @@ func main() {
 	hub := ws.NewHub()
 	go hub.Run()
 
+	influxWriter, err := repository.NewInfluxWriter(config.Cfg.InfluxDB)
+	if err != nil {
+		log.Fatalf("Failed to init InfluxDB writer: %v", err)
+	}
+
 	// 5. 启动嵌入式 MQTT Broker（基于 mochi-mqtt），监听机器人上行数据
 	if err := mqtt.InitBroker(config.Cfg.MQTT.Port); err != nil {
 		log.Fatalf("Failed to init MQTT broker: %v", err)
@@ -72,7 +78,7 @@ func main() {
 	//    - tdw/robot/{id}/position  → 更新坐标位置 → WebSocket 推送
 	//    - tdw/robot/{id}/status    → 更新运行状态/环境数据 → WebSocket 推送
 	//    - tdw/robot/{id}/alarm     → 写入告警表 → WebSocket 推送
-	msgHandler := mqtt.NewMessageHandler(hub)
+	msgHandler := mqtt.NewMessageHandler(hub, influxWriter)
 	if err := msgHandler.RegisterHooks(mqtt.Server); err != nil {
 		log.Fatalf("Failed to register MQTT hooks: %v", err)
 	}

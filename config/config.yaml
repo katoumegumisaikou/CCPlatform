@@ -12,6 +12,13 @@ database:
   max_idle_conns: 10
   max_open_conns: 100
 
+influxdb:
+  enabled: false
+  url: http://127.0.0.1:8086
+  token: ""
+  org: ccplatform
+  bucket: robot_telemetry
+
 mqtt:
   port: 1883
   ws_port: 8083
