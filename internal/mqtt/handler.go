@@ -440,7 +440,7 @@ func (h *MessageHandler) handleStatus(robotID string, payload []byte) {
 		WindSpeed:      msg.WindSpeed,
 		RecordTime:     time.Unix(msg.Timestamp, 0),
 	})
-	h.writeInflux("robot_status", robotID, data, time.Unix(msg.Timestamp, 0))
+	h.writeInflux("robot_status", robotID, updateData, time.Unix(msg.Timestamp, 0))
 
 	statusData := map[string]interface{}{
 		"robot_id":  robotID,
