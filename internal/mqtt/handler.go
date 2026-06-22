@@ -33,27 +33,49 @@ type HeartbeatPayload struct {
 // PositionPayload 位置消息，机器人每1秒上报一次。
 // 包含三维坐标和朝向，用于 GIS 地图实时展示。
 type PositionPayload struct {
-	RobotID   string  `json:"robot_id"`  // 机器人 ID
-	Timestamp int64   `json:"timestamp"` // 时间戳
-	PosX      float64 `json:"pos_x"`     // X 坐标 (m)
-	PosY      float64 `json:"pos_y"`     // Y 坐标 (m)
-	PosZ      float64 `json:"pos_z"`     // Z 坐标 (m)
-	Heading   float64 `json:"heading"`   // 朝向角度 (度)
+	RobotID      string   `json:"robot_id"`      // 机器人 ID
+	Timestamp    int64    `json:"timestamp"`     // 时间戳
+	PosX         float64  `json:"pos_x"`         // X 坐标 (m)
+	PosY         float64  `json:"pos_y"`         // Y 坐标 (m)
+	PosZ         float64  `json:"pos_z"`         // Z 坐标 (m)
+	Heading      float64  `json:"heading"`       // 朝向角度 (度)
+	GPSLongitude *float64 `json:"gps_longitude"` // GPS 经度
+	GPSLatitude  *float64 `json:"gps_latitude"`  // GPS 纬度
+	GPSAltitude  *float64 `json:"gps_altitude"`  // GPS 高度
+	GPSAccuracy  *float64 `json:"gps_accuracy"`  // GPS 精度
 }
 
 // StatusPayload 运行状态消息，机器人每10秒上报一次。
 // 包含运行参数和环境传感器数据。
 type StatusPayload struct {
-	RobotID        string  `json:"robot_id"`        // 机器人 ID
-	Timestamp      int64   `json:"timestamp"`       // 时间戳
-	WorkStatus     int8    `json:"work_status"`     // 工作状态
-	Speed          float64 `json:"speed"`           // 速度 (m/s)
-	CleanArea      float64 `json:"clean_area"`      // 累计清扫面积 (㎡)
-	FaultCode      int     `json:"fault_code"`      // 故障码
-	Temperature    float64 `json:"temperature"`     // 温度 (℃)
-	Humidity       float64 `json:"humidity"`        // 湿度 (%)
-	LightIntensity float64 `json:"light_intensity"` // 光照强度 (lux)
-	WindSpeed      float64 `json:"wind_speed"`      // 风速 (m/s)
+	RobotID                 string   `json:"robot_id"`                   // 机器人 ID
+	Timestamp               int64    `json:"timestamp"`                  // 时间戳
+	WorkStatus              int8     `json:"work_status"`                // 工作状态
+	Speed                   float64  `json:"speed"`                      // 速度 (m/s)
+	CleanArea               float64  `json:"clean_area"`                 // 累计清扫面积 (㎡)
+	FaultCode               int      `json:"fault_code"`                 // 故障码
+	Temperature             float64  `json:"temperature"`                // 温度 (℃)
+	Humidity                float64  `json:"humidity"`                   // 湿度 (%)
+	LightIntensity          float64  `json:"light_intensity"`            // 光照强度 (lux)
+	WindSpeed               float64  `json:"wind_speed"`                 // 风速 (m/s)
+	BatteryVoltage          *float64 `json:"battery_voltage"`            // 主电池电压
+	FaultStatus             *int8    `json:"fault_status"`               // 故障状态
+	WorkPeriod              *int8    `json:"work_period"`                // 工作时段
+	SignalStrength          *int     `json:"signal_strength"`            // 综合信号强度
+	Signal4GStrength        *int     `json:"signal_4g_strength"`         // 4G 信号强度
+	RunDurationSeconds      *int64   `json:"run_duration_seconds"`       // 运行时长
+	CartBatteryVoltage      *float64 `json:"cart_battery_voltage"`       // 清扫小车电池电压
+	CartLowVoltageStatus    *int8    `json:"cart_low_voltage_status"`    // 清扫小车低压状态
+	ShuttleBatteryVoltage   *float64 `json:"shuttle_battery_voltage"`    // 接驳车电池电压
+	ShuttleLowVoltageStatus *int8    `json:"shuttle_low_voltage_status"` // 接驳车低压状态
+	ShuttleMotorCurrent     *float64 `json:"shuttle_motor_current"`      // 接驳车电机电流
+	CartCleanMotorCurrent   *float64 `json:"cart_clean_motor_current"`   // 清扫电机电流
+	CartTravelMotorCurrent  *float64 `json:"cart_travel_motor_current"`  // 行进电机电流
+	ShuttlePowerPercent     *int8    `json:"shuttle_power_percent"`      // 接驳车功率选择
+	ShuttleStartPosition    *int8    `json:"shuttle_start_position"`     // 接驳车起点位置
+	ShuttleEndPosition      *int8    `json:"shuttle_end_position"`       // 接驳车终点位置
+	ShuttleHasCleaner       *int8    `json:"shuttle_has_cleaner"`        // 接驳车上是否有清扫车
+	DeviceTime              *int64   `json:"device_time"`                // 设备当前时间戳
 }
 
 // AlarmPayload 告警消息，机器人故障时实时上报。
@@ -253,6 +275,12 @@ func (h *MessageHandler) StoredSysInfo() (storage.SystemInfo, error) {
 	return storage.SystemInfo{}, nil
 }
 
+func addIfPresent[T any](target map[string]interface{}, key string, value *T) {
+	if value != nil {
+		target[key] = *value
+	}
+}
+
 func (h *MessageHandler) handleHeartbeat(robotID string, payload []byte) {
 	var msg HeartbeatPayload
 	if err := json.Unmarshal(payload, &msg); err != nil {
@@ -304,6 +332,16 @@ func (h *MessageHandler) handlePosition(robotID string, payload []byte) {
 		log.Printf("[MQTT] Update position error: %v", err)
 		return
 	}
+	positionExtra := map[string]interface{}{}
+	addIfPresent(positionExtra, "gps_longitude", msg.GPSLongitude)
+	addIfPresent(positionExtra, "gps_latitude", msg.GPSLatitude)
+	addIfPresent(positionExtra, "gps_altitude", msg.GPSAltitude)
+	addIfPresent(positionExtra, "gps_accuracy", msg.GPSAccuracy)
+	if len(positionExtra) > 0 {
+		if err := h.robotRepo.UpdateStatus(robotID, positionExtra); err != nil {
+			log.Printf("[MQTT] Update GPS fields error: %v", err)
+		}
+	}
 
 	// 写入位置历史表，用于轨迹回放
 	h.posHistoryRepo.Create(&model.RobotPosition{
@@ -321,16 +359,22 @@ func (h *MessageHandler) handlePosition(robotID string, payload []byte) {
 		"heading": msg.Heading,
 	}, time.Unix(msg.Timestamp, 0))
 
+	positionData := map[string]interface{}{
+		"robot_id":  robotID,
+		"pos_x":     msg.PosX,
+		"pos_y":     msg.PosY,
+		"pos_z":     msg.PosZ,
+		"heading":   msg.Heading,
+		"timestamp": msg.Timestamp,
+	}
+	addIfPresent(positionData, "gps_longitude", msg.GPSLongitude)
+	addIfPresent(positionData, "gps_latitude", msg.GPSLatitude)
+	addIfPresent(positionData, "gps_altitude", msg.GPSAltitude)
+	addIfPresent(positionData, "gps_accuracy", msg.GPSAccuracy)
+
 	h.wsHub.BroadcastToAll(ws.Message{
 		Type: "position",
-		Data: map[string]interface{}{
-			"robot_id":  robotID,
-			"pos_x":     msg.PosX,
-			"pos_y":     msg.PosY,
-			"pos_z":     msg.PosZ,
-			"heading":   msg.Heading,
-			"timestamp": msg.Timestamp,
-		},
+		Data: positionData,
 	})
 }
 
@@ -347,7 +391,7 @@ func (h *MessageHandler) handleStatus(robotID string, payload []byte) {
 		oldWorkStatus = robot.WorkStatus
 	}
 
-	data := map[string]interface{}{
+	updateData := map[string]interface{}{
 		"work_status":     msg.WorkStatus,
 		"speed":           msg.Speed,
 		"clean_area":      msg.CleanArea,
@@ -357,7 +401,27 @@ func (h *MessageHandler) handleStatus(robotID string, payload []byte) {
 		"light_intensity": msg.LightIntensity,
 		"wind_speed":      msg.WindSpeed,
 	}
-	if err := h.robotRepo.UpdateStatus(robotID, data); err != nil {
+	addIfPresent(updateData, "battery_voltage", msg.BatteryVoltage)
+	addIfPresent(updateData, "fault_status", msg.FaultStatus)
+	addIfPresent(updateData, "work_period", msg.WorkPeriod)
+	addIfPresent(updateData, "signal_strength", msg.SignalStrength)
+	addIfPresent(updateData, "signal_4g_strength", msg.Signal4GStrength)
+	addIfPresent(updateData, "run_duration_seconds", msg.RunDurationSeconds)
+	addIfPresent(updateData, "cart_battery_voltage", msg.CartBatteryVoltage)
+	addIfPresent(updateData, "cart_low_voltage_status", msg.CartLowVoltageStatus)
+	addIfPresent(updateData, "shuttle_battery_voltage", msg.ShuttleBatteryVoltage)
+	addIfPresent(updateData, "shuttle_low_voltage_status", msg.ShuttleLowVoltageStatus)
+	addIfPresent(updateData, "shuttle_motor_current", msg.ShuttleMotorCurrent)
+	addIfPresent(updateData, "cart_clean_motor_current", msg.CartCleanMotorCurrent)
+	addIfPresent(updateData, "cart_travel_motor_current", msg.CartTravelMotorCurrent)
+	addIfPresent(updateData, "shuttle_power_percent", msg.ShuttlePowerPercent)
+	addIfPresent(updateData, "shuttle_start_position", msg.ShuttleStartPosition)
+	addIfPresent(updateData, "shuttle_end_position", msg.ShuttleEndPosition)
+	addIfPresent(updateData, "shuttle_has_cleaner", msg.ShuttleHasCleaner)
+	if msg.DeviceTime != nil {
+		updateData["device_time"] = time.Unix(*msg.DeviceTime, 0)
+	}
+	if err := h.robotRepo.UpdateStatus(robotID, updateData); err != nil {
 		log.Printf("[MQTT] Update status error: %v", err)
 		return
 	}
@@ -378,9 +442,16 @@ func (h *MessageHandler) handleStatus(robotID string, payload []byte) {
 	})
 	h.writeInflux("robot_status", robotID, data, time.Unix(msg.Timestamp, 0))
 
+	statusData := map[string]interface{}{
+		"robot_id":  robotID,
+		"timestamp": msg.Timestamp,
+	}
+	for key, value := range updateData {
+		statusData[key] = value
+	}
 	h.wsHub.BroadcastToAll(ws.Message{
 		Type: "status",
-		Data: data,
+		Data: statusData,
 	})
 }
 

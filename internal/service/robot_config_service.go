@@ -61,8 +61,13 @@ func (s *RobotConfigService) ApplyConfig(robotID, configID string) error {
 	}
 
 	return s.publisher.SendConfig(robotID, map[string]interface{}{
-		"action":      "apply_config",
-		"config_id":   cfg.ConfigID,
-		"config_data": cfg.ConfigData,
+		"action":               "apply_config",
+		"config_id":            cfg.ConfigID,
+		"config_data":          cfg.ConfigData,
+		"schedule_config":      cfg.ScheduleConfig,
+		"control_config":       cfg.ControlConfig,
+		"threshold_config":     cfg.ThresholdConfig,
+		"server_config":        cfg.ServerConfig,
+		"communication_config": cfg.CommunicationConfig,
 	})
 }

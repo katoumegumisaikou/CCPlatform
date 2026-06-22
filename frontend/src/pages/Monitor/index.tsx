@@ -122,6 +122,16 @@ function pick<T extends string | number>(realtimeVal: T | undefined | null, deta
   return fallback;
 }
 
+function displayNumber(value: number | undefined | null, suffix = '', digits?: number): string {
+  if (value == null) return '-';
+  return `${digits === undefined ? value : value.toFixed(digits)}${suffix}`;
+}
+
+function displayBool(value: number | undefined | null, trueText = '是', falseText = '否'): string {
+  if (value == null) return '-';
+  return value === 1 ? trueText : falseText;
+}
+
 function mockWorldToLatLng(x: number, y: number): { longitude: number; latitude: number } {
   const lngSpan = 0.018;
   const latSpan = 0.012;
@@ -840,6 +850,10 @@ export default function Monitor() {
                 pos_z: (d2.pos_z as number) ?? cur.pos_z,
                 heading: (d2.heading as number) ?? cur.heading,
                 speed: (d2.speed as number) ?? cur.speed,
+                gps_longitude: (d2.gps_longitude as number) ?? cur.gps_longitude,
+                gps_latitude: (d2.gps_latitude as number) ?? cur.gps_latitude,
+                gps_altitude: (d2.gps_altitude as number) ?? cur.gps_altitude,
+                gps_accuracy: (d2.gps_accuracy as number) ?? cur.gps_accuracy,
               });
             });
             return next;
@@ -855,6 +869,10 @@ export default function Monitor() {
                 pos_z: (d3.pos_z as number) ?? prev.pos_z,
                 heading: (d3.heading as number) ?? prev.heading,
                 speed: (d3.speed as number) ?? prev.speed,
+                gps_longitude: (d3.gps_longitude as number) ?? prev.gps_longitude,
+                gps_latitude: (d3.gps_latitude as number) ?? prev.gps_latitude,
+                gps_altitude: (d3.gps_altitude as number) ?? prev.gps_altitude,
+                gps_accuracy: (d3.gps_accuracy as number) ?? prev.gps_accuracy,
               };
             });
           }
@@ -889,13 +907,59 @@ export default function Monitor() {
         const next = new Map(prev);
         const cur = next.get(rid);
         if (!cur) return prev;
-        next.set(rid, { ...cur, work_status: (d.work_status as number) ?? cur.work_status });
+        next.set(rid, {
+          ...cur,
+          work_status: (d.work_status as number) ?? cur.work_status,
+          speed: (d.speed as number) ?? cur.speed,
+          clean_area: (d.clean_area as number) ?? cur.clean_area,
+          battery_voltage: (d.battery_voltage as number) ?? cur.battery_voltage,
+          fault_status: (d.fault_status as number) ?? cur.fault_status,
+          work_period: (d.work_period as number) ?? cur.work_period,
+          signal_strength: (d.signal_strength as number) ?? cur.signal_strength,
+          signal_4g_strength: (d.signal_4g_strength as number) ?? cur.signal_4g_strength,
+          run_duration_seconds: (d.run_duration_seconds as number) ?? cur.run_duration_seconds,
+          cart_battery_voltage: (d.cart_battery_voltage as number) ?? cur.cart_battery_voltage,
+          cart_low_voltage_status: (d.cart_low_voltage_status as number) ?? cur.cart_low_voltage_status,
+          shuttle_battery_voltage: (d.shuttle_battery_voltage as number) ?? cur.shuttle_battery_voltage,
+          shuttle_low_voltage_status: (d.shuttle_low_voltage_status as number) ?? cur.shuttle_low_voltage_status,
+          shuttle_motor_current: (d.shuttle_motor_current as number) ?? cur.shuttle_motor_current,
+          cart_clean_motor_current: (d.cart_clean_motor_current as number) ?? cur.cart_clean_motor_current,
+          cart_travel_motor_current: (d.cart_travel_motor_current as number) ?? cur.cart_travel_motor_current,
+          shuttle_power_percent: (d.shuttle_power_percent as number) ?? cur.shuttle_power_percent,
+          shuttle_start_position: (d.shuttle_start_position as number) ?? cur.shuttle_start_position,
+          shuttle_end_position: (d.shuttle_end_position as number) ?? cur.shuttle_end_position,
+          shuttle_has_cleaner: (d.shuttle_has_cleaner as number) ?? cur.shuttle_has_cleaner,
+          device_time: (d.device_time as string) ?? cur.device_time,
+        });
         return next;
       });
       if (rid === selectedRobotId) {
         setRobotDetail((prev) => {
           if (!prev) return prev;
-          return { ...prev, work_status: (d.work_status as number) ?? prev.work_status };
+          return {
+            ...prev,
+            work_status: (d.work_status as number) ?? prev.work_status,
+            speed: (d.speed as number) ?? prev.speed,
+            clean_area: (d.clean_area as number) ?? prev.clean_area,
+            battery_voltage: (d.battery_voltage as number) ?? prev.battery_voltage,
+            fault_status: (d.fault_status as number) ?? prev.fault_status,
+            work_period: (d.work_period as number) ?? prev.work_period,
+            signal_strength: (d.signal_strength as number) ?? prev.signal_strength,
+            signal_4g_strength: (d.signal_4g_strength as number) ?? prev.signal_4g_strength,
+            run_duration_seconds: (d.run_duration_seconds as number) ?? prev.run_duration_seconds,
+            cart_battery_voltage: (d.cart_battery_voltage as number) ?? prev.cart_battery_voltage,
+            cart_low_voltage_status: (d.cart_low_voltage_status as number) ?? prev.cart_low_voltage_status,
+            shuttle_battery_voltage: (d.shuttle_battery_voltage as number) ?? prev.shuttle_battery_voltage,
+            shuttle_low_voltage_status: (d.shuttle_low_voltage_status as number) ?? prev.shuttle_low_voltage_status,
+            shuttle_motor_current: (d.shuttle_motor_current as number) ?? prev.shuttle_motor_current,
+            cart_clean_motor_current: (d.cart_clean_motor_current as number) ?? prev.cart_clean_motor_current,
+            cart_travel_motor_current: (d.cart_travel_motor_current as number) ?? prev.cart_travel_motor_current,
+            shuttle_power_percent: (d.shuttle_power_percent as number) ?? prev.shuttle_power_percent,
+            shuttle_start_position: (d.shuttle_start_position as number) ?? prev.shuttle_start_position,
+            shuttle_end_position: (d.shuttle_end_position as number) ?? prev.shuttle_end_position,
+            shuttle_has_cleaner: (d.shuttle_has_cleaner as number) ?? prev.shuttle_has_cleaner,
+            device_time: (d.device_time as string) ?? prev.device_time,
+          };
         });
       }
     },
@@ -1118,18 +1182,43 @@ export default function Monitor() {
       pos_y: pick(rt?.pos_y, detail?.pos_y, 0),
       pos_z: pick(rt?.pos_z, detail?.pos_z, 0),
       heading: pick(rt?.heading, detail?.heading, 0),
+      gps_longitude: rt?.gps_longitude ?? detail?.gps_longitude,
+      gps_latitude: rt?.gps_latitude ?? detail?.gps_latitude,
+      gps_altitude: rt?.gps_altitude ?? detail?.gps_altitude,
+      gps_accuracy: rt?.gps_accuracy ?? detail?.gps_accuracy,
       speed: pick(rt?.speed, detail?.speed, 0),
       clean_area: pick(rt?.clean_area, detail?.clean_area, 0),
+      battery_voltage: rt?.battery_voltage ?? detail?.battery_voltage,
+      fault_status: rt?.fault_status ?? detail?.fault_status,
+      work_period: rt?.work_period ?? detail?.work_period,
+      signal_strength: rt?.signal_strength ?? detail?.signal_strength,
+      signal_4g_strength: rt?.signal_4g_strength ?? detail?.signal_4g_strength,
+      run_duration_seconds: rt?.run_duration_seconds ?? detail?.run_duration_seconds,
+      cart_battery_voltage: rt?.cart_battery_voltage ?? detail?.cart_battery_voltage,
+      cart_low_voltage_status: rt?.cart_low_voltage_status ?? detail?.cart_low_voltage_status,
+      shuttle_battery_voltage: rt?.shuttle_battery_voltage ?? detail?.shuttle_battery_voltage,
+      shuttle_low_voltage_status: rt?.shuttle_low_voltage_status ?? detail?.shuttle_low_voltage_status,
+      shuttle_motor_current: rt?.shuttle_motor_current ?? detail?.shuttle_motor_current,
+      cart_clean_motor_current: rt?.cart_clean_motor_current ?? detail?.cart_clean_motor_current,
+      cart_travel_motor_current: rt?.cart_travel_motor_current ?? detail?.cart_travel_motor_current,
+      shuttle_power_percent: rt?.shuttle_power_percent ?? detail?.shuttle_power_percent,
+      shuttle_start_position: rt?.shuttle_start_position ?? detail?.shuttle_start_position,
+      shuttle_end_position: rt?.shuttle_end_position ?? detail?.shuttle_end_position,
+      shuttle_has_cleaner: rt?.shuttle_has_cleaner ?? detail?.shuttle_has_cleaner,
       temperature: pick(rt?.temperature, detail?.temperature, 0),
       humidity: pick(rt?.humidity, detail?.humidity, 0),
       light_intensity: pick(rt?.light_intensity, detail?.light_intensity, 0),
       wind_speed: pick(rt?.wind_speed, detail?.wind_speed, 0),
+      device_time: rt?.device_time ?? detail?.device_time,
     };
 
     const online = ONLINE_STATUS_MAP[r.online_status] ?? ONLINE_STATUS_MAP[0];
     const work = WORK_STATUS_MAP[r.work_status] ?? WORK_STATUS_MAP[0];
     const robotTypeName = ROBOT_TYPE_MAP[r.robot_type] ?? '未知';
     const batteryStatus = r.battery_level < 20 ? 'exception' : r.battery_level < 50 ? 'normal' : 'success';
+    const runDurationText = r.run_duration_seconds
+      ? `${Math.floor(r.run_duration_seconds / 3600)}小时${Math.floor((r.run_duration_seconds % 3600) / 60)}分`
+      : '-';
     const isTrackView = activeRobotTab === 'tracks' && replayRobot;
     const sceneRobot = isTrackView ? replayRobot : r;
     const sceneFooterLabel = isTrackView
@@ -1152,6 +1241,13 @@ export default function Monitor() {
               <Progress percent={r.battery_level} size="small" status={batteryStatus}
                 format={(p) => `${p}%`} style={{ maxWidth: 200 }} />
             </Descriptions.Item>
+            <Descriptions.Item label="电池电压">{displayNumber(r.battery_voltage, ' V', 1)}</Descriptions.Item>
+            <Descriptions.Item label="故障状态">{displayBool(r.fault_status, '异常', '正常')}</Descriptions.Item>
+            <Descriptions.Item label="工作时段">{r.work_period || '-'}</Descriptions.Item>
+            <Descriptions.Item label="运行时长">{runDurationText}</Descriptions.Item>
+            <Descriptions.Item label="信号强度">{displayNumber(r.signal_strength)}</Descriptions.Item>
+            <Descriptions.Item label="4G信号强度">{displayNumber(r.signal_4g_strength)}</Descriptions.Item>
+            <Descriptions.Item label="设备时间">{r.device_time || '-'}</Descriptions.Item>
           </Descriptions>
         ),
       },
@@ -1163,11 +1259,33 @@ export default function Monitor() {
             <Descriptions.Item label="Y坐标">{r.pos_y.toFixed(4)}</Descriptions.Item>
             <Descriptions.Item label="Z坐标">{r.pos_z.toFixed(4)}</Descriptions.Item>
             <Descriptions.Item label="朝向">{r.heading.toFixed(1)}°</Descriptions.Item>
+            <Descriptions.Item label="GPS经度">{displayNumber(r.gps_longitude, '', 7)}</Descriptions.Item>
+            <Descriptions.Item label="GPS纬度">{displayNumber(r.gps_latitude, '', 7)}</Descriptions.Item>
+            <Descriptions.Item label="GPS高度">{displayNumber(r.gps_altitude, ' m', 1)}</Descriptions.Item>
+            <Descriptions.Item label="GPS精度">{displayNumber(r.gps_accuracy, ' m', 2)}</Descriptions.Item>
             <Descriptions.Item label="速度"><Text strong>{r.speed.toFixed(2)}</Text><Text type="secondary"> m/s</Text></Descriptions.Item>
             <Descriptions.Item label="清扫面积">
               <Text strong style={{ color: '#1677ff', fontSize: 15 }}>{r.clean_area.toFixed(2)}</Text>
               <Text type="secondary"> m²</Text>
             </Descriptions.Item>
+          </Descriptions>
+        ),
+      },
+      {
+        key: 'shuttle', label: '接驳参数',
+        children: (
+          <Descriptions column={1} size="small" bordered>
+            <Descriptions.Item label="小车电池电压">{displayNumber(r.cart_battery_voltage, ' V', 1)}</Descriptions.Item>
+            <Descriptions.Item label="小车电压低">{displayBool(r.cart_low_voltage_status, '低压', '正常')}</Descriptions.Item>
+            <Descriptions.Item label="接驳车电池电压">{displayNumber(r.shuttle_battery_voltage, ' V', 1)}</Descriptions.Item>
+            <Descriptions.Item label="接驳车电压低">{displayBool(r.shuttle_low_voltage_status, '低压', '正常')}</Descriptions.Item>
+            <Descriptions.Item label="接驳车电机电流">{displayNumber(r.shuttle_motor_current, ' A', 1)}</Descriptions.Item>
+            <Descriptions.Item label="小车清扫电机电流">{displayNumber(r.cart_clean_motor_current, ' A', 1)}</Descriptions.Item>
+            <Descriptions.Item label="小车行进电机电流">{displayNumber(r.cart_travel_motor_current, ' A', 1)}</Descriptions.Item>
+            <Descriptions.Item label="接驳车功率选择">{displayNumber(r.shuttle_power_percent, '%')}</Descriptions.Item>
+            <Descriptions.Item label="接驳车起点位置">{displayBool(r.shuttle_start_position)}</Descriptions.Item>
+            <Descriptions.Item label="接驳车终点位置">{displayBool(r.shuttle_end_position)}</Descriptions.Item>
+            <Descriptions.Item label="接驳车上有清扫车">{displayBool(r.shuttle_has_cleaner)}</Descriptions.Item>
           </Descriptions>
         ),
       },

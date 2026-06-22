@@ -17,6 +17,16 @@ import {
 
 const { Title } = Typography;
 
+const displayNumber = (value: number | undefined, suffix = '', digits?: number) => {
+  if (value === undefined || value === null) return '-';
+  return `${digits === undefined ? value : value.toFixed(digits)}${suffix}`;
+};
+
+const displayBool = (value: number | undefined, trueText = '是', falseText = '否') => {
+  if (value === undefined || value === null) return '-';
+  return value === 1 ? trueText : falseText;
+};
+
 interface FilterParams {
   station_id?: string;
   robot_type?: number;
@@ -471,12 +481,36 @@ export default function RobotsPage() {
               </Tag>
             </Descriptions.Item>
             <Descriptions.Item label="电量">{detailRobot.battery_level}%</Descriptions.Item>
+            <Descriptions.Item label="电池电压">{displayNumber(detailRobot.battery_voltage, ' V', 1)}</Descriptions.Item>
             <Descriptions.Item label="清扫面积">{detailRobot.clean_area?.toFixed(2)} m²</Descriptions.Item>
             <Descriptions.Item label="速度">{detailRobot.speed} m/s</Descriptions.Item>
             <Descriptions.Item label="朝向">{detailRobot.heading}°</Descriptions.Item>
             <Descriptions.Item label="位置">
               ({detailRobot.pos_x}, {detailRobot.pos_y}, {detailRobot.pos_z})
             </Descriptions.Item>
+            <Descriptions.Item label="GPS经度">{displayNumber(detailRobot.gps_longitude, '', 7)}</Descriptions.Item>
+            <Descriptions.Item label="GPS纬度">{displayNumber(detailRobot.gps_latitude, '', 7)}</Descriptions.Item>
+            <Descriptions.Item label="GPS高度">{displayNumber(detailRobot.gps_altitude, ' m', 1)}</Descriptions.Item>
+            <Descriptions.Item label="GPS精度">{displayNumber(detailRobot.gps_accuracy, ' m', 2)}</Descriptions.Item>
+            <Descriptions.Item label="故障状态">{displayBool(detailRobot.fault_status, '异常', '正常')}</Descriptions.Item>
+            <Descriptions.Item label="工作时段">{detailRobot.work_period || '-'}</Descriptions.Item>
+            <Descriptions.Item label="信号强度">{displayNumber(detailRobot.signal_strength)}</Descriptions.Item>
+            <Descriptions.Item label="4G信号强度">{displayNumber(detailRobot.signal_4g_strength)}</Descriptions.Item>
+            <Descriptions.Item label="运行时长">
+              {detailRobot.run_duration_seconds ? `${Math.floor(detailRobot.run_duration_seconds / 3600)}小时${Math.floor((detailRobot.run_duration_seconds % 3600) / 60)}分` : '-'}
+            </Descriptions.Item>
+            <Descriptions.Item label="设备时间">{detailRobot.device_time || '-'}</Descriptions.Item>
+            <Descriptions.Item label="小车电池电压">{displayNumber(detailRobot.cart_battery_voltage, ' V', 1)}</Descriptions.Item>
+            <Descriptions.Item label="小车电压低">{displayBool(detailRobot.cart_low_voltage_status, '低压', '正常')}</Descriptions.Item>
+            <Descriptions.Item label="接驳车电池电压">{displayNumber(detailRobot.shuttle_battery_voltage, ' V', 1)}</Descriptions.Item>
+            <Descriptions.Item label="接驳车电压低">{displayBool(detailRobot.shuttle_low_voltage_status, '低压', '正常')}</Descriptions.Item>
+            <Descriptions.Item label="接驳车电机电流">{displayNumber(detailRobot.shuttle_motor_current, ' A', 1)}</Descriptions.Item>
+            <Descriptions.Item label="小车清扫电机电流">{displayNumber(detailRobot.cart_clean_motor_current, ' A', 1)}</Descriptions.Item>
+            <Descriptions.Item label="小车行进电机电流">{displayNumber(detailRobot.cart_travel_motor_current, ' A', 1)}</Descriptions.Item>
+            <Descriptions.Item label="接驳车功率选择">{displayNumber(detailRobot.shuttle_power_percent, '%')}</Descriptions.Item>
+            <Descriptions.Item label="接驳车起点位置">{displayBool(detailRobot.shuttle_start_position)}</Descriptions.Item>
+            <Descriptions.Item label="接驳车终点位置">{displayBool(detailRobot.shuttle_end_position)}</Descriptions.Item>
+            <Descriptions.Item label="接驳车上有清扫车">{displayBool(detailRobot.shuttle_has_cleaner)}</Descriptions.Item>
             <Descriptions.Item label="温度">{detailRobot.temperature}°C</Descriptions.Item>
             <Descriptions.Item label="湿度">{detailRobot.humidity}%</Descriptions.Item>
             <Descriptions.Item label="光照强度">{detailRobot.light_intensity} lux</Descriptions.Item>
