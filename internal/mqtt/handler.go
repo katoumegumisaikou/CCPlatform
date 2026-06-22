@@ -97,11 +97,12 @@ type MessageHandler struct {
 	envRepo        *repository.EnvironmentDataRepo // 环境数据
 	cleanRepo      *repository.CleaningRecordRepo  // 清扫记录
 	taskRepo       *repository.TaskRepo            // 任务数据操作（clean 面积更新、work_status 联动）
-	wsHub          *ws.Hub                         // WebSocket 广播器
+	influx         *repository.InfluxWriter
+	wsHub          *ws.Hub // WebSocket 广播器
 }
 
 // NewMessageHandler 创建消息处理器实例。
-func NewMessageHandler(wsHub *ws.Hub) *MessageHandler {
+func NewMessageHandler(wsHub *ws.Hub, influx *repository.InfluxWriter) *MessageHandler {
 	return &MessageHandler{
 		robotRepo:      repository.NewRobotRepo(),
 		alarmRepo:      repository.NewAlarmRepo(),
@@ -109,6 +110,7 @@ func NewMessageHandler(wsHub *ws.Hub) *MessageHandler {
 		envRepo:        repository.NewEnvironmentDataRepo(),
 		cleanRepo:      repository.NewCleaningRecordRepo(),
 		taskRepo:       repository.NewTaskRepo(),
+		influx:         influx,
 		wsHub:          wsHub,
 	}
 }
@@ -268,6 +270,11 @@ func (h *MessageHandler) handleHeartbeat(robotID string, payload []byte) {
 		log.Printf("[MQTT] Update heartbeat error: %v", err)
 		return
 	}
+	h.writeInflux("robot_heartbeat", robotID, map[string]interface{}{
+		"battery_level": msg.BatteryLevel,
+		"online_status": msg.OnlineStatus,
+		"work_status":   msg.WorkStatus,
+	}, time.Unix(msg.Timestamp, 0))
 
 	// work_status 变更时触发任务状态联动
 	if oldWorkStatus >= 0 {
@@ -307,6 +314,12 @@ func (h *MessageHandler) handlePosition(robotID string, payload []byte) {
 		Heading:   msg.Heading,
 		Timestamp: time.Unix(msg.Timestamp, 0),
 	})
+	h.writeInflux("robot_position", robotID, map[string]interface{}{
+		"pos_x":   msg.PosX,
+		"pos_y":   msg.PosY,
+		"pos_z":   msg.PosZ,
+		"heading": msg.Heading,
+	}, time.Unix(msg.Timestamp, 0))
 
 	h.wsHub.BroadcastToAll(ws.Message{
 		Type: "position",
@@ -363,6 +376,7 @@ func (h *MessageHandler) handleStatus(robotID string, payload []byte) {
 		WindSpeed:      msg.WindSpeed,
 		RecordTime:     time.Unix(msg.Timestamp, 0),
 	})
+	h.writeInflux("robot_status", robotID, data, time.Unix(msg.Timestamp, 0))
 
 	h.wsHub.BroadcastToAll(ws.Message{
 		Type: "status",
@@ -407,6 +421,11 @@ func (h *MessageHandler) handleAlarm(robotID string, payload []byte) {
 		log.Printf("[MQTT] Create alarm error: %v", err)
 		return
 	}
+	h.writeInflux("robot_alarm", robotID, map[string]interface{}{
+		"alarm_level":   finalLevel,
+		"alarm_type":    msg.AlarmType,
+		"alarm_content": msg.AlarmContent,
+	}, time.Unix(msg.Timestamp, 0))
 
 	// 通知分发：查找匹配的通知模板
 	notifyRepo := repository.NewNotifyTemplateRepo()
@@ -445,6 +464,12 @@ func (h *MessageHandler) handleClean(robotID string, payload []byte) {
 		CleanArea:  msg.CleanArea,
 		RecordTime: time.Unix(msg.Timestamp, 0),
 	})
+	h.writeInflux("robot_clean", robotID, map[string]interface{}{
+		"task_id":    msg.TaskID,
+		"pos_x":      msg.PosX,
+		"pos_y":      msg.PosY,
+		"clean_area": msg.CleanArea,
+	}, time.Unix(msg.Timestamp, 0))
 
 	// 实时更新任务的累计清扫面积
 	if msg.TaskID > 0 {
@@ -491,6 +516,17 @@ func (h *MessageHandler) handleOTA(robotID string, payload []byte) {
 	}
 
 	log.Printf("[MQTT] OTA status for robot %s: status=%d", robotID, msg.Status)
+	h.writeInflux("robot_ota", robotID, map[string]interface{}{
+		"firmware_id": msg.FirmwareID,
+		"status":      msg.Status,
+		"error_msg":   msg.ErrorMsg,
+	}, time.Unix(msg.Timestamp, 0))
+}
+
+func (h *MessageHandler) writeInflux(measurement, robotID string, fields map[string]interface{}, ts time.Time) {
+	if err := h.influx.WritePoint(measurement, map[string]string{"robot_id": robotID}, fields, ts); err != nil {
+		log.Printf("[InfluxDB] Write %s error: %v", measurement, err)
+	}
 }
 
 // ===== 告警规则评估（内置于 handler，避免 mqtt ↔ service 循环引用）=====
