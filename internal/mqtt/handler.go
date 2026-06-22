@@ -352,12 +352,17 @@ func (h *MessageHandler) handlePosition(robotID string, payload []byte) {
 		Heading:   msg.Heading,
 		Timestamp: time.Unix(msg.Timestamp, 0),
 	})
-	h.writeInflux("robot_position", robotID, map[string]interface{}{
+	positionInfluxData := map[string]interface{}{
 		"pos_x":   msg.PosX,
 		"pos_y":   msg.PosY,
 		"pos_z":   msg.PosZ,
 		"heading": msg.Heading,
-	}, time.Unix(msg.Timestamp, 0))
+	}
+	addIfPresent(positionInfluxData, "gps_longitude", msg.GPSLongitude)
+	addIfPresent(positionInfluxData, "gps_latitude", msg.GPSLatitude)
+	addIfPresent(positionInfluxData, "gps_altitude", msg.GPSAltitude)
+	addIfPresent(positionInfluxData, "gps_accuracy", msg.GPSAccuracy)
+	h.writeInflux("robot_position", robotID, positionInfluxData, time.Unix(msg.Timestamp, 0))
 
 	positionData := map[string]interface{}{
 		"robot_id":  robotID,

@@ -164,6 +164,7 @@ func escapeKey(s string) string {
 
 // formatField 把 Go 值转换成 InfluxDB field value 字面量。
 // 整数需要带 i 后缀，无符号整数带 u 后缀；字符串需要引号并转义反斜杠和双引号。
+// time.Time 会写成 UnixNano 整数，便于保留设备时间字段的时间精度。
 // 返回 false 表示该类型当前不支持写入。
 func formatField(v interface{}) (string, bool) {
 	switch x := v.(type) {
@@ -181,6 +182,11 @@ func formatField(v interface{}) (string, bool) {
 		return `"` + strings.ReplaceAll(strings.ReplaceAll(x, `\`, `\\`), `"`, `\"`) + `"`, true
 	case bool:
 		return strconv.FormatBool(x), true
+	case time.Time:
+		if x.IsZero() {
+			return "", false
+		}
+		return strconv.FormatInt(x.UnixNano(), 10) + "i", true
 	default:
 		return "", false
 	}
