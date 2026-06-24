@@ -40,6 +40,7 @@ go.work.sum
 # 忽略 agent 配置
 CLAUDE.md
 AGENTS.md 
+.omc/
 
 进度汇报-2026-05-23.md
 TODO.md
