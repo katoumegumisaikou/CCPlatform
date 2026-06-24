@@ -58,7 +58,7 @@ export default function AppLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout } = useAuthStore();
-  const { token: { colorBgContainer, borderRadiusLG } } = theme.useToken();
+  const { token: { colorBgContainer, borderRadiusLG, colorPrimary } } = theme.useToken();
 
   const handleMenuClick = ({ key }: { key: string }) => {
     navigate(key);
@@ -84,16 +84,22 @@ export default function AppLayout() {
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
-      <Sider trigger={null} collapsible collapsed={collapsed} theme="dark">
+      <Sider
+        trigger={null}
+        collapsible
+        collapsed={collapsed}
+        theme="light"
+        style={{ background: '#fff', borderRight: '1px solid #f0f0f0' }}
+      >
         <div style={{
           height: 48, margin: 16, display: 'flex',
-          alignItems: 'center', justifyContent: 'center', color: '#fff',
+          alignItems: 'center', justifyContent: 'center', color: colorPrimary,
           fontWeight: 'bold', fontSize: collapsed ? 14 : 18,
         }}>
           {collapsed ? 'CC' : 'CCPlatform'}
         </div>
         <Menu
-          theme="dark"
+          theme="light"
           mode="inline"
           selectedKeys={selectedKeys}
           defaultOpenKeys={openKeys}

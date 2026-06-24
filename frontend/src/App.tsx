@@ -26,7 +26,22 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   return (
-    <ConfigProvider locale={zhCN} theme={{ token: { colorPrimary: '#1677ff' } }}>
+    <ConfigProvider
+      locale={zhCN}
+      theme={{
+        token: {
+          colorPrimary: '#1677ff',
+          colorBgLayout: '#f0f5ff',
+          borderRadius: 6,
+        },
+        components: {
+          Menu: {
+            itemSelectedBg: '#e6f4ff',
+            itemSelectedColor: '#1677ff',
+          },
+        },
+      }}
+    >
       <AntApp>
         <BrowserRouter>
           <Routes>

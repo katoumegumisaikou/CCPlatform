@@ -4,9 +4,9 @@ server:
 
 database:
   host: 127.0.0.1
-  port: 3306
+  port: 3307
   user: root
-  password: ""
+  password: "root"
   dbname: ccplatform
   charset: utf8mb4
   max_idle_conns: 10
@@ -15,7 +15,7 @@ database:
 influxdb:
   enabled: true
   url: http://127.0.0.1:8086
-  token: ""
+  token: "27eafbf1ea57aa892358f45edaabda242beb52ca9fafba4b50184070eb836bce"
   org: ccplatform
   bucket: robot_telemetry
 
