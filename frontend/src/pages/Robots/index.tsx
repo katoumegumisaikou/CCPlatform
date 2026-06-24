@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, type ReactNode } from 'react';
 import {
   Table, Button, Modal, Form, Input, Select, Popconfirm, message, Space, Tag,
   Card, Row, Col, Typography, Progress, Descriptions,
@@ -15,16 +15,26 @@ import {
   ROBOT_TYPE_MAP, ONLINE_STATUS_MAP, WORK_STATUS_MAP,
 } from '../../utils';
 
-const { Title } = Typography;
+const { Title, Text } = Typography;
 
-const displayNumber = (value: number | undefined, suffix = '', digits?: number) => {
+const displayNumber = (value: number | null | undefined, suffix = '', digits?: number) => {
   if (value === undefined || value === null) return '-';
   return `${digits === undefined ? value : value.toFixed(digits)}${suffix}`;
 };
 
-const displayBool = (value: number | undefined, trueText = '是', falseText = '否') => {
+const displayBool = (value: number | null | undefined, trueText = '是', falseText = '否') => {
   if (value === undefined || value === null) return '-';
   return value === 1 ? trueText : falseText;
+};
+
+const displayText = (value: string | null | undefined) => value || '-';
+
+const displayDuration = (seconds: number | null | undefined) => {
+  if (seconds === undefined || seconds === null) return '-';
+  const safeSeconds = Math.max(0, seconds);
+  const hours = Math.floor(safeSeconds / 3600);
+  const minutes = Math.floor((safeSeconds % 3600) / 60);
+  return hours > 0 ? `${hours}小时${minutes}分` : `${minutes}分`;
 };
 
 interface FilterParams {
@@ -32,6 +42,144 @@ interface FilterParams {
   robot_type?: number;
   online_status?: number;
 }
+
+type RobotColumn = ColumnsType<Robot>[number];
+
+type DetailField = {
+  label: string;
+  value: ReactNode;
+};
+
+const textColumn = (
+  title: string,
+  dataIndex: keyof Robot,
+  width = 120,
+  ellipsis = false,
+): RobotColumn => ({
+  title,
+  dataIndex,
+  key: String(dataIndex),
+  width,
+  ellipsis,
+  render: (value: string | null | undefined) => displayText(value),
+});
+
+const numberColumn = (
+  title: string,
+  dataIndex: keyof Robot,
+  width = 110,
+  suffix = '',
+  digits?: number,
+): RobotColumn => ({
+  title,
+  dataIndex,
+  key: String(dataIndex),
+  width,
+  align: 'right',
+  render: (value: number | null | undefined) => displayNumber(value, suffix, digits),
+});
+
+const boolColumn = (
+  title: string,
+  dataIndex: keyof Robot,
+  width = 120,
+  trueText = '是',
+  falseText = '否',
+): RobotColumn => ({
+  title,
+  dataIndex,
+  key: String(dataIndex),
+  width,
+  align: 'center',
+  render: (value: number | null | undefined) => displayBool(value, trueText, falseText),
+});
+
+const getRobotDetailSections = (robot: Robot): { title: string; fields: DetailField[] }[] => [
+  {
+    title: '基础信息',
+    fields: [
+      { label: '机器人ID', value: <Text copyable>{robot.robot_id}</Text> },
+      { label: '机器人编码', value: robot.robot_code },
+      { label: '机器人名称', value: robot.robot_name },
+      { label: '类型', value: <Tag>{ROBOT_TYPE_MAP[robot.robot_type] || robot.robot_type}</Tag> },
+      { label: '所属电站ID', value: robot.station_id },
+      { label: '所属电站名称', value: displayText(robot.station_name) },
+      { label: '创建时间', value: displayText(robot.create_time) },
+      { label: '更新时间', value: displayText(robot.update_time) },
+    ],
+  },
+  {
+    title: '状态与电气',
+    fields: [
+      {
+        label: '在线状态',
+        value: (
+          <Tag color={ONLINE_STATUS_MAP[robot.online_status]?.color}>
+            {ONLINE_STATUS_MAP[robot.online_status]?.text || '未知'}
+          </Tag>
+        ),
+      },
+      {
+        label: '工作状态',
+        value: (
+          <Tag color={WORK_STATUS_MAP[robot.work_status]?.color}>
+            {WORK_STATUS_MAP[robot.work_status]?.text || '未知'}
+          </Tag>
+        ),
+      },
+      { label: '电量', value: displayNumber(robot.battery_level, '%') },
+      { label: '电池电压', value: displayNumber(robot.battery_voltage, ' V', 1) },
+      { label: '故障状态', value: displayBool(robot.fault_status, '异常', '正常') },
+      { label: '故障码', value: displayNumber(robot.fault_code) },
+      { label: '工作时段', value: displayNumber(robot.work_period) },
+      { label: '综合信号强度', value: displayNumber(robot.signal_strength) },
+      { label: '4G信号强度', value: displayNumber(robot.signal_4g_strength) },
+      { label: '累计运行时长', value: displayDuration(robot.run_duration_seconds) },
+      { label: '设备时间', value: displayText(robot.device_time) },
+      { label: '最后心跳', value: displayText(robot.last_heartbeat) },
+    ],
+  },
+  {
+    title: '位置与GPS',
+    fields: [
+      { label: 'X坐标', value: displayNumber(robot.pos_x, ' m', 3) },
+      { label: 'Y坐标', value: displayNumber(robot.pos_y, ' m', 3) },
+      { label: 'Z坐标', value: displayNumber(robot.pos_z, ' m', 3) },
+      { label: '朝向', value: displayNumber(robot.heading, '°', 2) },
+      { label: 'GPS经度', value: displayNumber(robot.gps_longitude, '', 7) },
+      { label: 'GPS纬度', value: displayNumber(robot.gps_latitude, '', 7) },
+      { label: 'GPS海拔', value: displayNumber(robot.gps_altitude, ' m', 3) },
+      { label: 'GPS定位精度', value: displayNumber(robot.gps_accuracy, ' m', 3) },
+    ],
+  },
+  {
+    title: '作业与环境',
+    fields: [
+      { label: '速度', value: displayNumber(robot.speed, ' m/s', 2) },
+      { label: '累计清扫面积', value: displayNumber(robot.clean_area, ' m²', 2) },
+      { label: '温度', value: displayNumber(robot.temperature, '°C', 1) },
+      { label: '湿度', value: displayNumber(robot.humidity, '%', 1) },
+      { label: '光照强度', value: displayNumber(robot.light_intensity, ' lux', 2) },
+      { label: '风速', value: displayNumber(robot.wind_speed, ' m/s', 2) },
+    ],
+  },
+  {
+    title: '接驳车与清扫小车',
+    fields: [
+      { label: '清扫小车电池电压', value: displayNumber(robot.cart_battery_voltage, ' V', 1) },
+      { label: '清扫小车低电压状态', value: displayBool(robot.cart_low_voltage_status, '低压', '正常') },
+      { label: '接驳车电池电压', value: displayNumber(robot.shuttle_battery_voltage, ' V', 1) },
+      { label: '接驳车低电压状态', value: displayBool(robot.shuttle_low_voltage_status, '低压', '正常') },
+      { label: '接驳车电机电流', value: displayNumber(robot.shuttle_motor_current, ' A', 1) },
+      { label: '清扫小车清扫电机电流', value: displayNumber(robot.cart_clean_motor_current, ' A', 1) },
+      { label: '清扫小车行进电机电流', value: displayNumber(robot.cart_travel_motor_current, ' A', 1) },
+      { label: '接驳车功率选择', value: displayNumber(robot.shuttle_power_percent, '%') },
+      { label: '接驳车起点位置', value: displayBool(robot.shuttle_start_position) },
+      { label: '接驳车终点位置', value: displayBool(robot.shuttle_end_position) },
+      { label: '接驳车上是否有清扫车', value: displayBool(robot.shuttle_has_cleaner) },
+    ],
+  },
+];
 
 export default function RobotsPage() {
   const [data, setData] = useState<Robot[]>([]);
@@ -143,7 +291,7 @@ export default function RobotsPage() {
   };
 
   // 控制命令映射
-  const COMMANDS: { key: string; label: string; icon: React.ReactNode; cmd: string }[] = [
+  const COMMANDS: { key: string; label: string; icon: ReactNode; cmd: string }[] = [
     { key: 'start', label: '启动', icon: <PlayCircleOutlined />, cmd: 'start' },
     { key: 'stop', label: '停止', icon: <PauseCircleOutlined />, cmd: 'stop' },
     { key: 'return', label: '回仓', icon: <HomeOutlined />, cmd: 'return' },
@@ -166,19 +314,9 @@ export default function RobotsPage() {
   };
 
   const columns: ColumnsType<Robot> = [
-    {
-      title: '机器人编码',
-      dataIndex: 'robot_code',
-      key: 'robot_code',
-      width: 140,
-    },
-    {
-      title: '名称',
-      dataIndex: 'robot_name',
-      key: 'robot_name',
-      width: 150,
-      ellipsis: true,
-    },
+    textColumn('机器人ID', 'robot_id', 160, true),
+    textColumn('机器人编码', 'robot_code', 140, true),
+    textColumn('名称', 'robot_name', 150, true),
     {
       title: '类型',
       dataIndex: 'robot_type',
@@ -187,13 +325,35 @@ export default function RobotsPage() {
       align: 'center',
       render: (type: number) => ROBOT_TYPE_MAP[type] || type,
     },
+    textColumn('所属电站ID', 'station_id', 140, true),
+    textColumn('所属电站名称', 'station_name', 160, true),
+    numberColumn('X坐标(m)', 'pos_x', 110, '', 3),
+    numberColumn('Y坐标(m)', 'pos_y', 110, '', 3),
+    numberColumn('Z坐标(m)', 'pos_z', 110, '', 3),
+    numberColumn('朝向(°)', 'heading', 100, '', 2),
+    numberColumn('GPS经度', 'gps_longitude', 120, '', 7),
+    numberColumn('GPS纬度', 'gps_latitude', 120, '', 7),
+    numberColumn('GPS海拔(m)', 'gps_altitude', 120, '', 3),
+    numberColumn('GPS精度(m)', 'gps_accuracy', 120, '', 3),
     {
-      title: '所属电站',
-      dataIndex: 'station_name',
-      key: 'station_name',
-      width: 160,
-      ellipsis: true,
+      title: '电量',
+      dataIndex: 'battery_level',
+      key: 'battery_level',
+      width: 120,
+      align: 'center',
+      render: (level: number | null | undefined) => {
+        const percent = level ?? 0;
+        return (
+          <Progress
+            percent={percent}
+            size="small"
+            status={percent <= 20 ? 'exception' : percent <= 50 ? 'normal' : 'success'}
+            format={(p) => `${p}%`}
+          />
+        );
+      },
     },
+    numberColumn('电池电压(V)', 'battery_voltage', 120, '', 1),
     {
       title: '在线状态',
       dataIndex: 'online_status',
@@ -216,27 +376,40 @@ export default function RobotsPage() {
         return <Tag color={cfg.color}>{cfg.text}</Tag>;
       },
     },
+    boolColumn('故障状态', 'fault_status', 110, '异常', '正常'),
+    numberColumn('工作时段', 'work_period', 100),
+    numberColumn('综合信号', 'signal_strength', 110),
+    numberColumn('4G信号', 'signal_4g_strength', 110),
     {
-      title: '电量',
-      dataIndex: 'battery_level',
-      key: 'battery_level',
+      title: '运行时长',
+      dataIndex: 'run_duration_seconds',
+      key: 'run_duration_seconds',
       width: 120,
-      align: 'center',
-      render: (level: number) => (
-        <Progress
-          percent={level}
-          size="small"
-          status={level <= 20 ? 'exception' : level <= 50 ? 'normal' : 'success'}
-          format={(p) => `${p}%`}
-        />
-      ),
+      align: 'right',
+      render: (seconds: number | null | undefined) => displayDuration(seconds),
     },
-    {
-      title: '最后心跳',
-      dataIndex: 'last_heartbeat',
-      key: 'last_heartbeat',
-      width: 170,
-    },
+    numberColumn('速度(m/s)', 'speed', 110, '', 2),
+    numberColumn('清扫面积(m²)', 'clean_area', 130, '', 2),
+    numberColumn('故障码', 'fault_code', 100),
+    numberColumn('小车电压(V)', 'cart_battery_voltage', 120, '', 1),
+    boolColumn('小车低压', 'cart_low_voltage_status', 110, '低压', '正常'),
+    numberColumn('接驳车电压(V)', 'shuttle_battery_voltage', 130, '', 1),
+    boolColumn('接驳车低压', 'shuttle_low_voltage_status', 120, '低压', '正常'),
+    numberColumn('接驳车电流(A)', 'shuttle_motor_current', 130, '', 1),
+    numberColumn('清扫电机电流(A)', 'cart_clean_motor_current', 140, '', 1),
+    numberColumn('行进电机电流(A)', 'cart_travel_motor_current', 140, '', 1),
+    numberColumn('接驳车功率(%)', 'shuttle_power_percent', 130),
+    boolColumn('接驳起点', 'shuttle_start_position', 110),
+    boolColumn('接驳终点', 'shuttle_end_position', 110),
+    boolColumn('车上有清扫车', 'shuttle_has_cleaner', 130),
+    numberColumn('温度(°C)', 'temperature', 100, '', 1),
+    numberColumn('湿度(%)', 'humidity', 100, '', 1),
+    numberColumn('光照(lux)', 'light_intensity', 110, '', 2),
+    numberColumn('风速(m/s)', 'wind_speed', 110, '', 2),
+    textColumn('设备时间', 'device_time', 170, true),
+    textColumn('最后心跳', 'last_heartbeat', 170, true),
+    textColumn('创建时间', 'create_time', 170, true),
+    textColumn('更新时间', 'update_time', 170, true),
     {
       title: '操作',
       key: 'actions',
@@ -382,7 +555,7 @@ export default function RobotsPage() {
           locale={{
             emptyText: '暂无机器人数据',
           }}
-          scroll={{ x: 1300 }}
+          scroll={{ x: 5600 }}
         />
       </Card>
 
@@ -460,64 +633,26 @@ export default function RobotsPage() {
             关闭
           </Button>,
         ]}
-        width={720}
+        width={860}
       >
         {detailRobot && (
-          <Descriptions bordered column={2} size="small" style={{ marginTop: 8 }}>
-            <Descriptions.Item label="机器人编码">{detailRobot.robot_code}</Descriptions.Item>
-            <Descriptions.Item label="机器人名称">{detailRobot.robot_name}</Descriptions.Item>
-            <Descriptions.Item label="类型">
-              <Tag>{ROBOT_TYPE_MAP[detailRobot.robot_type] || detailRobot.robot_type}</Tag>
-            </Descriptions.Item>
-            <Descriptions.Item label="所属电站">{detailRobot.station_name || detailRobot.station_id}</Descriptions.Item>
-            <Descriptions.Item label="在线状态">
-              <Tag color={ONLINE_STATUS_MAP[detailRobot.online_status]?.color}>
-                {ONLINE_STATUS_MAP[detailRobot.online_status]?.text || '未知'}
-              </Tag>
-            </Descriptions.Item>
-            <Descriptions.Item label="工作状态">
-              <Tag color={WORK_STATUS_MAP[detailRobot.work_status]?.color}>
-                {WORK_STATUS_MAP[detailRobot.work_status]?.text || '未知'}
-              </Tag>
-            </Descriptions.Item>
-            <Descriptions.Item label="电量">{detailRobot.battery_level}%</Descriptions.Item>
-            <Descriptions.Item label="电池电压">{displayNumber(detailRobot.battery_voltage, ' V', 1)}</Descriptions.Item>
-            <Descriptions.Item label="清扫面积">{detailRobot.clean_area?.toFixed(2)} m²</Descriptions.Item>
-            <Descriptions.Item label="速度">{detailRobot.speed} m/s</Descriptions.Item>
-            <Descriptions.Item label="朝向">{detailRobot.heading}°</Descriptions.Item>
-            <Descriptions.Item label="位置">
-              ({detailRobot.pos_x}, {detailRobot.pos_y}, {detailRobot.pos_z})
-            </Descriptions.Item>
-            <Descriptions.Item label="GPS经度">{displayNumber(detailRobot.gps_longitude, '', 7)}</Descriptions.Item>
-            <Descriptions.Item label="GPS纬度">{displayNumber(detailRobot.gps_latitude, '', 7)}</Descriptions.Item>
-            <Descriptions.Item label="GPS高度">{displayNumber(detailRobot.gps_altitude, ' m', 1)}</Descriptions.Item>
-            <Descriptions.Item label="GPS精度">{displayNumber(detailRobot.gps_accuracy, ' m', 2)}</Descriptions.Item>
-            <Descriptions.Item label="故障状态">{displayBool(detailRobot.fault_status, '异常', '正常')}</Descriptions.Item>
-            <Descriptions.Item label="工作时段">{detailRobot.work_period || '-'}</Descriptions.Item>
-            <Descriptions.Item label="信号强度">{displayNumber(detailRobot.signal_strength)}</Descriptions.Item>
-            <Descriptions.Item label="4G信号强度">{displayNumber(detailRobot.signal_4g_strength)}</Descriptions.Item>
-            <Descriptions.Item label="运行时长">
-              {detailRobot.run_duration_seconds ? `${Math.floor(detailRobot.run_duration_seconds / 3600)}小时${Math.floor((detailRobot.run_duration_seconds % 3600) / 60)}分` : '-'}
-            </Descriptions.Item>
-            <Descriptions.Item label="设备时间">{detailRobot.device_time || '-'}</Descriptions.Item>
-            <Descriptions.Item label="小车电池电压">{displayNumber(detailRobot.cart_battery_voltage, ' V', 1)}</Descriptions.Item>
-            <Descriptions.Item label="小车电压低">{displayBool(detailRobot.cart_low_voltage_status, '低压', '正常')}</Descriptions.Item>
-            <Descriptions.Item label="接驳车电池电压">{displayNumber(detailRobot.shuttle_battery_voltage, ' V', 1)}</Descriptions.Item>
-            <Descriptions.Item label="接驳车电压低">{displayBool(detailRobot.shuttle_low_voltage_status, '低压', '正常')}</Descriptions.Item>
-            <Descriptions.Item label="接驳车电机电流">{displayNumber(detailRobot.shuttle_motor_current, ' A', 1)}</Descriptions.Item>
-            <Descriptions.Item label="小车清扫电机电流">{displayNumber(detailRobot.cart_clean_motor_current, ' A', 1)}</Descriptions.Item>
-            <Descriptions.Item label="小车行进电机电流">{displayNumber(detailRobot.cart_travel_motor_current, ' A', 1)}</Descriptions.Item>
-            <Descriptions.Item label="接驳车功率选择">{displayNumber(detailRobot.shuttle_power_percent, '%')}</Descriptions.Item>
-            <Descriptions.Item label="接驳车起点位置">{displayBool(detailRobot.shuttle_start_position)}</Descriptions.Item>
-            <Descriptions.Item label="接驳车终点位置">{displayBool(detailRobot.shuttle_end_position)}</Descriptions.Item>
-            <Descriptions.Item label="接驳车上有清扫车">{displayBool(detailRobot.shuttle_has_cleaner)}</Descriptions.Item>
-            <Descriptions.Item label="温度">{detailRobot.temperature}°C</Descriptions.Item>
-            <Descriptions.Item label="湿度">{detailRobot.humidity}%</Descriptions.Item>
-            <Descriptions.Item label="光照强度">{detailRobot.light_intensity} lux</Descriptions.Item>
-            <Descriptions.Item label="风速">{detailRobot.wind_speed} m/s</Descriptions.Item>
-            <Descriptions.Item label="最后心跳">{detailRobot.last_heartbeat}</Descriptions.Item>
-            <Descriptions.Item label="创建时间">{detailRobot.create_time}</Descriptions.Item>
-          </Descriptions>
+          <Space direction="vertical" size={16} style={{ width: '100%', marginTop: 8 }}>
+            {getRobotDetailSections(detailRobot).map((section) => (
+              <Descriptions
+                key={section.title}
+                title={section.title}
+                bordered
+                column={2}
+                size="small"
+              >
+                {section.fields.map((field) => (
+                  <Descriptions.Item key={`${section.title}-${field.label}`} label={field.label}>
+                    {field.value}
+                  </Descriptions.Item>
+                ))}
+              </Descriptions>
+            ))}
+          </Space>
         )}
       </Modal>
     </div>

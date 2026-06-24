@@ -96,6 +96,7 @@ export interface Robot {
   gps_accuracy?: number;
   speed: number;
   clean_area: number;
+  fault_code?: number;
   battery_voltage?: number;
   fault_status?: number;
   work_period?: number;
@@ -120,6 +121,7 @@ export interface Robot {
   device_time?: string | null;
   last_heartbeat: string | null;
   create_time: string;
+  update_time?: string;
 }
 
 // ===== 任务 =====
