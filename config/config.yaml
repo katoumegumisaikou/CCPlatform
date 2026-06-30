@@ -1,0 +1,65 @@
+server:
+  port: 8080
+  mode: debug
+
+database:
+  host: 127.0.0.1
+  port: 3306
+  user: root
+  password: "1234"
+  dbname: ccplatform
+  charset: utf8mb4
+  max_idle_conns: 10
+  max_open_conns: 100
+
+influxdb:
+  enabled: true
+  url: http://127.0.0.1:8086
+  token: "27eafbf1ea57aa892358f45edaabda242beb52ca9fafba4b50184070eb836bce"
+  org: ccplatform
+  bucket: robot_telemetry
+
+mqtt:
+  port: 1883
+  ws_port: 8083
+
+jwt:
+  secret: tdw-ccplatform-secret-key-2026
+  expire_hours: 24
+
+log:
+  level: info
+  filename: logs/app.log
+  max_size: 100
+  max_backups: 5
+  max_age: 30
+
+notify:
+  sms:
+    provider: aliyun
+    access_key: ""
+    secret_key: ""
+    sign_name: "拓达威智能"
+  email:
+    smtp_host: smtp.example.com
+    smtp_port: 465
+    from: noreply@example.com
+    password: ""
+  app_push:
+    provider: jpush
+    app_key: ""
+    secret: ""
+
+ota:
+  storage_path: /data/firmware
+  upgrade_timeout: 300
+  max_retry: 3
+
+backup:
+  backup_path: /data/backup
+  cron_schedule: "0 2 * * *"
+  retention_days: 30
+
+video:
+  stream_type: hls
+  max_viewers: 100
