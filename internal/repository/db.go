@@ -22,7 +22,7 @@ func InitDB() error {
 	var err error
 	DB, err = gorm.Open(mysql.Open(config.Cfg.Database.DSN()), &gorm.Config{
 		Logger:                                   logger.Default.LogMode(logger.Info), // 启用 SQL 日志，便于调试
-			DisableForeignKeyConstraintWhenMigrating: true,                                // 禁用迁移时的外键约束，避免与已有表结构冲突
+		DisableForeignKeyConstraintWhenMigrating: true,                                // 禁用迁移时的外键约束，避免与已有表结构冲突
 	})
 	if err != nil {
 		return fmt.Errorf("connect database: %w", err)
@@ -62,6 +62,8 @@ func InitDB() error {
 		&model.DeviceCredential{},
 		&model.UpgradeRecord{},
 		&model.PasswordReset{},
+		&model.Geofence{},
+		&model.GeofenceAlarm{},
 	); err != nil {
 		return fmt.Errorf("auto migrate: %w", err)
 	}

@@ -17,6 +17,7 @@ import Maintenance from './pages/Maintenance';
 import Cameras from './pages/Cameras';
 import System from './pages/System';
 import Profile from './pages/Profile';
+import Geofences from './pages/Geofences';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const token = useAuthStore((s) => s.token);
@@ -66,6 +67,10 @@ export default function App() {
               <Route path="firmwares" element={<Firmwares />} />
               <Route path="maintenance" element={<Maintenance />} />
               <Route path="cameras" element={<Cameras />} />
+<<<<<<< HEAD
+=======
+              <Route path="geofences" element={<Geofences />} />
+>>>>>>> 99d084e (推送完整项目)
               <Route path="system/*" element={<System />} />
               <Route path="profile" element={<Profile />} />
             </Route>

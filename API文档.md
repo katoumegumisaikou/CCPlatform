@@ -18,7 +18,12 @@
 - [12. 组织管理](#12-组织管理)
 - [13. 设备管理](#13-设备管理)
 - [14. 报告与备份](#14-报告与备份)
+<<<<<<< HEAD
 - [15. 错误码](#15-错误码)
+=======
+- [15. 电子围栏](#15-电子围栏)
+- [16. 错误码](#16-错误码)
+>>>>>>> 99d084e (推送完整项目)
 
 ## 1. 通用规范
 
@@ -847,7 +852,70 @@ Body 为 SystemConfig 对象：`{config_key, config_value, category, description
 
 ---
 
-## 15. 错误码
+## 15. 电子围栏
+
+### 15.1 围栏管理
+
+| 方法 | 路径 | 权限 | 说明 |
+|------|------|------|------|
+| GET | `/api/v1/geofences` | JWT | 围栏列表（分页） |
+| POST | `/api/v1/geofences` | `system:config` | 创建围栏 |
+| GET | `/api/v1/geofences/all` | JWT | 全部围栏（无分页） |
+| GET | `/api/v1/geofences/:id` | JWT | 围栏详情 |
+| PUT | `/api/v1/geofences/:id` | `system:config` | 更新围栏 |
+| DELETE | `/api/v1/geofences/:id` | `system:config` | 删除围栏 |
+
+创建/更新围栏参数 `CreateGeofenceRequest`：
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| fence_name | string | ✅ | 围栏名称 |
+| fence_type | int8 | ✅ | 围栏形状: 1=圆形 2=多边形 |
+| action_type | int8 | ✅ | 动作: 1=禁止进入 2=禁止离开 |
+| scope_type | string | | 作用域: global/station/robot |
+| scope_id | string | | 作用域 ID |
+| center_lng | float64 | 圆形必填 | 圆心经度 |
+| center_lat | float64 | 圆形必填 | 圆心纬度 |
+| radius | float64 | 圆形必填 | 半径(米) |
+| points | string | 多边形必填 | 顶点坐标 JSON: `[[lng,lat],...]` |
+| alarm_level | int8 | | 告警级别: 1提示 2一般 3严重 4紧急 |
+| description | string | | 围栏描述 |
+| color | string | | 地图显示颜色, 默认 `#ff4d4f` |
+| status | int8 | | 状态: 0禁用 1启用 |
+
+### 15.2 围栏告警
+
+| 方法 | 路径 | 权限 | 说明 |
+|------|------|------|------|
+| GET | `/api/v1/geofence-alarms` | JWT | 围栏告警记录（分页） |
+| GET | `/api/v1/geofence-alarms/recent` | JWT | 最近未处理告警 |
+| PUT | `/api/v1/geofence-alarms/:id` | `alarm:handle` | 处理告警 |
+
+告警查询参数：`fence_id`, `robot_id`, `station_id`, `trigger_type`(1进入禁区 2离开工作区), `handle_status`
+
+处理告警请求体：`{handle_status: int8, remark?: string}`
+
+### 15.3 WebSocket 推送
+
+当机器人触发电子围栏规则时，平台通过 WebSocket 推送 `geofence_alarm` 消息：
+
+```json
+{
+  "type": "geofence_alarm",
+  "data": {
+    "alarm_id": "...",
+    "fence_name": "东区禁区",
+    "robot_name": "固定式001",
+    "trigger_type": 1,
+    "alarm_content": "机器人 固定式001 进入禁区「东区禁区」，位置(116.397, 39.909)",
+    "alarm_time": "2026-06-28T10:30:00+08:00"
+  }
+}
+```
+
+---
+
+## 16. 错误码
 
 | code | HTTP Status | 说明 |
 |------|-------------|------|
@@ -867,7 +935,11 @@ Body 为 SystemConfig 对象：`{config_key, config_value, category, description
 通过 WebSocket 连接接收实时推送，消息格式：
 
 ```json
+<<<<<<< HEAD
 {"type": "heartbeat|position|status|alarm", "data": {...}}
+=======
+{"type": "heartbeat|position|status|alarm|clean|geofence_alarm", "data": {...}}
+>>>>>>> 99d084e (推送完整项目)
 ```
 
 ## 附录：完整接口清单
@@ -989,5 +1061,14 @@ Body 为 SystemConfig 对象：`{config_key, config_value, category, description
 | 113 | POST | `/api/v1/backups` | system:config | — |
 | 114 | DELETE | `/api/v1/backups/:filename` | system:config | — |
 | 115 | POST | `/api/v1/backups/:filename/restore` | system:config | — |
+| 116 | GET | `/api/v1/geofences` | JWT | ✅ |
+| 117 | POST | `/api/v1/geofences` | system:config | — |
+| 118 | GET | `/api/v1/geofences/all` | JWT | — |
+| 119 | GET | `/api/v1/geofences/:id` | JWT | — |
+| 120 | PUT | `/api/v1/geofences/:id` | system:config | — |
+| 121 | DELETE | `/api/v1/geofences/:id` | system:config | — |
+| 122 | GET | `/api/v1/geofence-alarms` | JWT | ✅ |
+| 123 | GET | `/api/v1/geofence-alarms/recent` | JWT | — |
+| 124 | PUT | `/api/v1/geofence-alarms/:id` | alarm:handle | — |
 
-> 共 **115 个端点**：8 个公开 + 107 个需 JWT（其中 52 个额外需要 RBAC 权限）
+> 共 **124 个端点**：8 个公开 + 116 个需 JWT（其中 56 个额外需要 RBAC 权限）

@@ -301,7 +301,7 @@ export interface Organization {
 
 // ===== WebSocket 消息 =====
 
-export type WsMessageType = 'heartbeat' | 'position' | 'status' | 'alarm' | 'clean';
+export type WsMessageType = 'heartbeat' | 'position' | 'status' | 'alarm' | 'clean' | 'geofence_alarm';
 
 export interface WsMessage {
   type: WsMessageType;
@@ -315,4 +315,43 @@ export interface AnalyticsQuery {
   start_date?: string;
   end_date?: string;
   robot_type?: number;
+}
+
+// ===== 电子围栏 =====
+
+export interface Geofence {
+  geofence_id: string;
+  fence_name: string;
+  fence_type: number;
+  action_type: number;
+  scope_type: string;
+  scope_id: string;
+  center_lng: number;
+  center_lat: number;
+  radius: number;
+  points: string;
+  alarm_level: number;
+  description: string;
+  color: string;
+  status: number;
+  create_time: string;
+  update_time: string;
+}
+
+export interface GeofenceAlarm {
+  alarm_id: string;
+  fence_id: string;
+  fence_name: string;
+  robot_id: string;
+  robot_name: string;
+  station_id: string;
+  trigger_type: number;
+  position_lng: number;
+  position_lat: number;
+  alarm_content: string;
+  alarm_time: string;
+  handle_status: number;
+  handle_time: string | null;
+  handle_remark: string;
+  create_time: string;
 }

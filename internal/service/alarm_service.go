@@ -3,6 +3,8 @@ package service
 import (
 	"ccplatform/internal/model"
 	"ccplatform/internal/repository"
+	"ccplatform/pkg/util"
+	"time"
 )
 
 // AlarmService 告警业务逻辑层，处理告警的创建、查询、处理和统计。
@@ -70,3 +72,21 @@ func (s *AlarmService) GetTrendAnalysis(granularity, startTime, endTime string) 
 func (s *AlarmService) CountUnhandled() (int64, error) {
 	return s.repo.CountUnhandled()
 }
+<<<<<<< HEAD
+=======
+
+// CreateFromGeofence 从电子围栏触发创建告警记录，同时写入 alarms 表。
+func (s *AlarmService) CreateFromGeofence(robotID, stationID, alarmType string, alarmLevel int8, content string) error {
+	alarm := &model.Alarm{
+		AlarmID:      util.GenerateID(),
+		AlarmLevel:   alarmLevel,
+		AlarmType:    alarmType,
+		RobotID:      robotID,
+		StationID:    stationID,
+		AlarmContent: content,
+		AlarmTime:    time.Now(),
+		HandleStatus: 0,
+	}
+	return s.repo.Create(alarm)
+}
+>>>>>>> 99d084e (推送完整项目)
