@@ -1,0 +1,254 @@
+package service
+
+import (
+	"ccplatform/internal/model"
+	"ccplatform/internal/mqtt"
+	"ccplatform/internal/repository"
+	"ccplatform/internal/scheduler"
+	"fmt"
+	"log"
+	"time"
+)
+
+// TaskService 清扫任务业务逻辑层，处理任务的创建、状态流转和查询。
+type TaskService struct {
+	repo      *repository.TaskRepo
+	robotRepo *repository.RobotRepo
+	publisher *mqtt.Publisher
+	scheduler *scheduler.TaskScheduler
+}
+
+// NewTaskService 创建 TaskService 实例，注入 MQTT Publisher 和调度器。
+func NewTaskService(publisher *mqtt.Publisher, sch *scheduler.TaskScheduler) *TaskService {
+	return &TaskService{
+		repo:      repository.NewTaskRepo(),
+		robotRepo: repository.NewRobotRepo(),
+		publisher: publisher,
+		scheduler: sch,
+	}
+}
+
+// Create 创建新任务。自动从机器人信息中获取电站 ID，写入 DB 后通过 MQTT 下发给机器人。
+func (s *TaskService) Create(task *model.Task) error {
+	robot, err := s.robotRepo.GetByID(task.RobotID)
+	if err != nil {
+		return fmt.Errorf("robot not found: %w", err)
+	}
+	task.StationID = robot.StationID
+	if err := s.repo.Create(task); err != nil {
+		return err
+	}
+
+	// 周期任务：注册到 cron 调度器，按 cron_expr 重复执行
+	if task.TaskType == 3 {
+		if err := s.scheduler.ScheduleTask(task); err != nil {
+			return fmt.Errorf("schedule periodic task: %w", err)
+		}
+		return nil
+	}
+
+	// 定时任务：plan_start 在未来则注册为一次性调度，到点执行后自动移除
+	if task.TaskType == 2 && task.PlanStart != nil && task.PlanStart.After(time.Now()) {
+		cronExpr := fmt.Sprintf("0 %d %d %d %d *",
+			task.PlanStart.Minute(), task.PlanStart.Hour(),
+			task.PlanStart.Day(), task.PlanStart.Month())
+		task.CronExpr = cronExpr
+		_ = s.repo.Update(task) // 回写生成的 cron_expr 到 DB
+		if err := s.scheduler.ScheduleOneShot(task); err != nil {
+			return fmt.Errorf("schedule one-shot task: %w", err)
+		}
+		return nil
+	}
+
+	// 即时任务 / plan_start 已过期的定时任务：立即通过 MQTT 下发给机器人
+	params := map[string]interface{}{
+		"task_id":   task.TaskID,
+		"task_type": task.TaskType,
+		"area_ids":  task.AreaIDs,
+	}
+	if task.PlanStart != nil {
+		params["plan_start"] = task.PlanStart.Format("2006-01-02 15:04:05")
+	}
+	if task.PlanEnd != nil {
+		params["plan_end"] = task.PlanEnd.Format("2006-01-02 15:04:05")
+	}
+	_ = s.publisher.SendCommand(task.RobotID, "task", params)
+
+	// 即时任务下发后立即标记为执行中
+	if task.TaskType == 1 {
+		now := time.Now()
+		task.ActualStart = &now
+		task.TaskStatus = 1
+		_ = s.repo.Update(task)
+	}
+
+	return nil
+}
+
+// GetByID 根据 ID 查询任务详情。
+func (s *TaskService) GetByID(id uint) (*model.Task, error) {
+	return s.repo.GetByID(id)
+}
+
+// Update 更新任务信息。
+func (s *TaskService) Update(task *model.Task) error {
+	return s.repo.Update(task)
+}
+
+// Delete 删除任务。
+func (s *TaskService) Delete(id uint) error {
+	return s.repo.Delete(id)
+}
+
+// List 分页查询任务列表，支持按电站、机器人、状态筛选。
+func (s *TaskService) List(page, size int, stationID, robotID string, taskStatus int) ([]model.Task, int64, error) {
+	if page <= 0 {
+		page = 1
+	}
+	if size <= 0 {
+		size = 10
+	}
+	return s.repo.List(page, size, stationID, robotID, taskStatus)
+}
+
+// UpdateStatus 更新任务状态，包含状态流转校验。
+// 状态机:
+//
+//	0(待执行) → 1(执行中) → 2(已完成)
+//	0(待执行) → 3(已暂停) → 4(已取消)
+//	1(执行中) → 4(已取消)
+//	1(执行中) → 5(失败)
+func (s *TaskService) UpdateStatus(taskID uint, status int8) error {
+	task, err := s.repo.GetByID(taskID)
+	if err != nil {
+		return fmt.Errorf("task not found: %w", err)
+	}
+	// 状态流转校验
+	switch status {
+	case 1: // 开始/恢复执行：待执行或已暂停状态可启动
+		if task.TaskStatus != 0 && task.TaskStatus != 3 {
+			return fmt.Errorf("task can only start from pending or paused state")
+		}
+	case 2: // 完成：仅执行中状态可完成
+		if task.TaskStatus != 1 {
+			return fmt.Errorf("task can only complete from running state")
+		}
+	case 3: // 暂停：仅执行中状态可暂停
+		if task.TaskStatus != 1 {
+			return fmt.Errorf("task can only pause from running state")
+		}
+	case 4: // 取消：已完成/失败的任务不可取消
+		if task.TaskStatus == 2 || task.TaskStatus == 5 {
+			return fmt.Errorf("cannot cancel completed or failed task")
+		}
+	case 5: // 失败：仅执行中状态可标记失败
+		if task.TaskStatus != 1 {
+			return fmt.Errorf("task can only fail from running state")
+		}
+	}
+	if err := s.repo.UpdateStatus(taskID, status); err != nil {
+		return err
+	}
+
+	// 状态变更后通过 MQTT 向机器人同步控制指令
+	s.notifyRobotStatusChange(task, status)
+	return nil
+}
+
+// notifyRobotStatusChange 在任务状态变更后通过 MQTT 向机器人同步控制指令。
+// 仅处理需要通知机器人的状态（启动/暂停/取消/失败），完成状态由机器人自行上报。
+func (s *TaskService) notifyRobotStatusChange(task *model.Task, newStatus int8) {
+	var cmd string
+	params := map[string]interface{}{"task_id": task.TaskID}
+
+	switch newStatus {
+	case 1: // 开始/恢复执行
+		cmd = "start"
+	case 3: // 暂停
+		cmd = "stop"
+		params["reason"] = "paused"
+	case 4: // 取消
+		cmd = "stop"
+		params["reason"] = "cancelled"
+	case 5: // 失败
+		cmd = "stop"
+		params["reason"] = "failed"
+	default:
+		return
+	}
+
+	if err := s.publisher.SendCommand(task.RobotID, cmd, params); err != nil {
+		log.Printf("[TaskService] MQTT notify status change error (task=%d, cmd=%s): %v",
+			task.TaskID, cmd, err)
+	}
+}
+
+// SmartSchedule 智能调度：选择最优机器人执行任务。
+func (s *TaskService) SmartSchedule(stationID string) (*model.Task, error) {
+	robots, err := s.robotRepo.GetByStationID(stationID)
+	if err != nil || len(robots) == 0 {
+		return nil, fmt.Errorf("no robots available in station %s", stationID)
+	}
+	var best *model.Robot
+	for i := range robots {
+		r := &robots[i]
+		if r.OnlineStatus != 1 || r.BatteryLevel < 20 || r.WorkStatus == 1 {
+			continue
+		}
+		if best == nil || r.BatteryLevel > best.BatteryLevel {
+			best = r
+		}
+	}
+	if best == nil {
+		return nil, fmt.Errorf("no available robot in station %s", stationID)
+	}
+	task := &model.Task{
+		TaskName:   fmt.Sprintf("智能调度-%s", best.RobotName),
+		TaskType:   1,
+		RobotID:    best.RobotID,
+		StationID:  stationID,
+		TaskStatus: 0,
+	}
+	if err := s.Create(task); err != nil {
+		return nil, err
+	}
+	return task, nil
+}
+
+// GetProgress 计算任务清扫进度。
+func (s *TaskService) GetProgress(taskID uint) (map[string]interface{}, error) {
+	task, err := s.repo.GetByID(taskID)
+	if err != nil {
+		return nil, fmt.Errorf("task not found: %w", err)
+	}
+	result := map[string]interface{}{
+		"task_id":     task.TaskID,
+		"task_name":   task.TaskName,
+		"task_status": task.TaskStatus,
+		"clean_area":  task.CleanArea,
+	}
+	if task.TaskStatus == 1 && task.ActualStart != nil {
+		elapsed := 0.0
+		if task.PlanEnd != nil && task.PlanStart != nil {
+			totalDuration := task.PlanEnd.Sub(*task.PlanStart).Seconds()
+			if totalDuration > 0 {
+				elapsed = float64(task.UpdateTime.Sub(*task.ActualStart).Seconds())
+				progress := elapsed / totalDuration * 100
+				if progress > 100 {
+					progress = 100
+				}
+				result["progress"] = progress
+				remaining := totalDuration - elapsed
+				if remaining < 0 {
+					remaining = 0
+				}
+				result["estimated_remaining_seconds"] = remaining
+			}
+		}
+	}
+	if _, ok := result["progress"]; !ok {
+		result["progress"] = 0
+		result["estimated_remaining_seconds"] = 0
+	}
+	return result, nil
+}
