@@ -72,8 +72,6 @@ func (s *AlarmService) GetTrendAnalysis(granularity, startTime, endTime string) 
 func (s *AlarmService) CountUnhandled() (int64, error) {
 	return s.repo.CountUnhandled()
 }
-<<<<<<< HEAD
-=======
 
 // CreateFromGeofence 从电子围栏触发创建告警记录，同时写入 alarms 表。
 func (s *AlarmService) CreateFromGeofence(robotID, stationID, alarmType string, alarmLevel int8, content string) error {
@@ -89,4 +87,3 @@ func (s *AlarmService) CreateFromGeofence(robotID, stationID, alarmType string, 
 	}
 	return s.repo.Create(alarm)
 }
->>>>>>> 99d084e (推送完整项目)

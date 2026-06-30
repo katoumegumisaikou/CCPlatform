@@ -35,10 +35,7 @@ type Handlers struct {
 	Prediction     *handler.PredictionHandler
 	ReportTemplate *handler.ReportTemplateHandler
 	Backup         *handler.BackupHandler
-<<<<<<< HEAD
-=======
 	Geofence       *handler.GeofenceHandler
->>>>>>> 99d084e (推送完整项目)
 }
 
 func Setup(hub *ws.Hub, publisher *mqtt.Publisher, taskScheduler *scheduler.TaskScheduler) *gin.Engine {
@@ -110,10 +107,7 @@ func Setup(hub *ws.Hub, publisher *mqtt.Publisher, taskScheduler *scheduler.Task
 	registerOrganizationRoutes(protected, h)
 	registerDeviceRoutes(protected, h)
 	registerReportRoutes(protected, h)
-<<<<<<< HEAD
-=======
 	registerGeofenceRoutes(protected, h)
->>>>>>> 99d084e (推送完整项目)
 
 	return r
 }

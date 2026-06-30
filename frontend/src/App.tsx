@@ -67,10 +67,7 @@ export default function App() {
               <Route path="firmwares" element={<Firmwares />} />
               <Route path="maintenance" element={<Maintenance />} />
               <Route path="cameras" element={<Cameras />} />
-<<<<<<< HEAD
-=======
               <Route path="geofences" element={<Geofences />} />
->>>>>>> 99d084e (推送完整项目)
               <Route path="system/*" element={<System />} />
               <Route path="profile" element={<Profile />} />
             </Route>

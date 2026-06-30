@@ -18,12 +18,8 @@
 - [12. 组织管理](#12-组织管理)
 - [13. 设备管理](#13-设备管理)
 - [14. 报告与备份](#14-报告与备份)
-<<<<<<< HEAD
-- [15. 错误码](#15-错误码)
-=======
 - [15. 电子围栏](#15-电子围栏)
 - [16. 错误码](#16-错误码)
->>>>>>> 99d084e (推送完整项目)
 
 ## 1. 通用规范
 
@@ -935,11 +931,7 @@ Body 为 SystemConfig 对象：`{config_key, config_value, category, description
 通过 WebSocket 连接接收实时推送，消息格式：
 
 ```json
-<<<<<<< HEAD
-{"type": "heartbeat|position|status|alarm", "data": {...}}
-=======
 {"type": "heartbeat|position|status|alarm|clean|geofence_alarm", "data": {...}}
->>>>>>> 99d084e (推送完整项目)
 ```
 
 ## 附录：完整接口清单

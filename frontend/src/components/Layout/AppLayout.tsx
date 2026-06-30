@@ -35,10 +35,7 @@ const menuItems = [
   { key: '/firmwares', icon: <CloudServerOutlined />, label: '固件管理' },
   { key: '/maintenance', icon: <ToolOutlined />, label: '维护保养' },
   { key: '/cameras', icon: <CameraOutlined />, label: '摄像头管理' },
-<<<<<<< HEAD
-=======
   { key: '/geofences', icon: <SecurityScanOutlined />, label: '电子围栏' },
->>>>>>> 99d084e (推送完整项目)
 ];
 
 const breadcrumbMap: Record<string, string> = {
@@ -53,10 +50,7 @@ const breadcrumbMap: Record<string, string> = {
   '/firmwares': '固件管理',
   '/maintenance': '维护保养',
   '/cameras': '摄像头管理',
-<<<<<<< HEAD
-=======
   '/geofences': '电子围栏',
->>>>>>> 99d084e (推送完整项目)
   '/system/users': '用户管理',
   '/system/roles': '角色管理',
 };
