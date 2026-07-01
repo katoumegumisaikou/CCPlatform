@@ -62,6 +62,11 @@ func InitDB() error {
 		&model.DeviceCredential{},
 		&model.UpgradeRecord{},
 		&model.PasswordReset{},
+		&model.RobotComponentHealth{},
+		&model.RobotHealthHistory{},
+		&model.RobotSensorData{},
+		&model.FaultPattern{},
+		&model.FaultPrediction{},
 	); err != nil {
 		return fmt.Errorf("auto migrate: %w", err)
 	}

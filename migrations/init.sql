@@ -424,3 +424,83 @@ CREATE TABLE IF NOT EXISTS robot_configs (
     update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_robot_type (robot_type)
 ) ENGINE=InnoDB COMMENT='设备配置模板表';
+
+-- 机器人部件健康指数当前状态表
+CREATE TABLE IF NOT EXISTS robot_component_health (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    robot_id VARCHAR(32) COMMENT '机器人ID',
+    component VARCHAR(50) COMMENT '部件类型:drive_motor/brush_motor/battery/controller/sensor/transmission',
+    health_score DECIMAL(5,2) COMMENT '健康指数0-100',
+    health_level VARCHAR(20) COMMENT '健康等级:green/yellow/orange/red',
+    degrade_rate DECIMAL(6,3) COMMENT '健康度日均下降速率(分/天)',
+    metrics TEXT COMMENT '细分指标快照(JSON)',
+    update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE INDEX idx_robot_component (robot_id, component)
+) ENGINE=InnoDB COMMENT='机器人部件健康指数当前状态表';
+
+-- 机器人部件健康指数历史快照表
+CREATE TABLE IF NOT EXISTS robot_health_history (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    robot_id VARCHAR(32) COMMENT '机器人ID',
+    component VARCHAR(50) COMMENT '部件类型',
+    health_score DECIMAL(5,2) COMMENT '健康指数0-100',
+    record_time DATETIME COMMENT '记录时间',
+    INDEX idx_health_hist_robot_comp (robot_id, component),
+    INDEX idx_record_time (record_time)
+) ENGINE=InnoDB COMMENT='机器人部件健康指数历史快照表';
+
+-- PHM传感器数据表(振动/温度/电气参数)
+CREATE TABLE IF NOT EXISTS robot_sensor_data (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    robot_id VARCHAR(32) COMMENT '机器人ID',
+    component VARCHAR(50) COMMENT '采集部件',
+    vibration_rms DECIMAL(8,4) COMMENT '振动有效值(mm/s)',
+    vibration_peak DECIMAL(8,4) COMMENT '振动峰值(mm/s)',
+    crest_factor DECIMAL(6,3) COMMENT '峰值因子',
+    dominant_freq_hz DECIMAL(8,2) COMMENT '振动信号主频(Hz)',
+    bearing_fault_flag VARCHAR(20) COMMENT '轴承故障特征:none/outer_race/inner_race/ball',
+    winding_temp DECIMAL(5,2) COMMENT '电机绕组温度(℃)',
+    controller_temp DECIMAL(5,2) COMMENT '控制器散热片温度(℃)',
+    insulation_resist_mohm DECIMAL(10,2) COMMENT '绝缘电阻(MΩ)',
+    record_time DATETIME COMMENT '记录时间',
+    INDEX idx_robot_id (robot_id),
+    INDEX idx_component (component),
+    INDEX idx_record_time (record_time)
+) ENGINE=InnoDB COMMENT='PHM传感器数据表';
+
+-- 故障模式库表
+CREATE TABLE IF NOT EXISTS fault_patterns (
+    pattern_code VARCHAR(50) PRIMARY KEY COMMENT '故障模式编码',
+    component VARCHAR(50) COMMENT '所属部件',
+    fault_name VARCHAR(100) COMMENT '故障名称',
+    category VARCHAR(50) COMMENT '故障类别:motor/battery/sensor/comm/transmission/electrical',
+    symptom_desc VARCHAR(500) COMMENT '典型症状描述',
+    suggested_action VARCHAR(500) COMMENT '建议处置方案',
+    recommended_parts VARCHAR(200) COMMENT '推荐备件(逗号分隔)',
+    INDEX idx_component (component)
+) ENGINE=InnoDB COMMENT='故障模式库表';
+
+-- 故障预测结果表
+CREATE TABLE IF NOT EXISTS fault_predictions (
+    prediction_id VARCHAR(32) PRIMARY KEY,
+    robot_id VARCHAR(32) COMMENT '机器人ID',
+    station_id VARCHAR(32) COMMENT '电站ID',
+    component VARCHAR(50) COMMENT '部件类型',
+    pattern_code VARCHAR(50) COMMENT '故障模式编码',
+    fault_name VARCHAR(100) COMMENT '故障名称',
+    probability DECIMAL(5,4) COMMENT '故障概率0-1',
+    risk_level VARCHAR(20) COMMENT '风险等级:high/medium/low',
+    confidence DECIMAL(5,4) COMMENT '预测置信度0-1',
+    predicted_start DATETIME COMMENT '预测故障窗口开始时间',
+    predicted_end DATETIME COMMENT '预测故障窗口结束时间',
+    suggested_action VARCHAR(500) COMMENT '建议处置方案',
+    recommended_parts VARCHAR(200) COMMENT '推荐备件',
+    status TINYINT DEFAULT 0 COMMENT '状态:0待处理1已生成工单2已忽略',
+    maint_id VARCHAR(32) COMMENT '关联维护工单ID',
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_robot_id (robot_id),
+    INDEX idx_station_id (station_id),
+    INDEX idx_status (status)
+) ENGINE=InnoDB COMMENT='故障预测结果表';

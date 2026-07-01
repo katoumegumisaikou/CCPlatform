@@ -316,3 +316,60 @@ export interface AnalyticsQuery {
   end_date?: string;
   robot_type?: number;
 }
+
+// ===== 故障预测与健康管理（PHM） =====
+
+export type PhmComponent = 'drive_motor' | 'brush_motor' | 'battery' | 'controller' | 'sensor' | 'transmission';
+export type HealthLevel = 'green' | 'yellow' | 'orange' | 'red';
+export type RiskLevel = 'high' | 'medium' | 'low';
+
+export interface RobotComponentHealth {
+  id: number;
+  robot_id: string;
+  component: PhmComponent;
+  health_score: number;
+  health_level: HealthLevel;
+  degrade_rate: number;
+  metrics: string;
+  update_time: string;
+  create_time: string;
+}
+
+export interface HealthOverview {
+  robot_id: string;
+  robot_name?: string;
+  overall_score: number;
+  overall_level: HealthLevel;
+  components: RobotComponentHealth[];
+}
+
+export interface HealthTrendPoint {
+  id: number;
+  robot_id: string;
+  component: string;
+  health_score: number;
+  record_time: string;
+}
+
+export interface HealthTrend {
+  robot_id: string;
+  component: string;
+  points: HealthTrendPoint[];
+  prev_period_avg?: number;
+  curr_period_avg?: number;
+  change_rate?: number;
+  trend_note?: string;
+}
+
+export interface SparePartForecastItem {
+  part_name: string;
+  expected_qty: number;
+  related_fault_count: number;
+}
+
+export interface MaintenanceWindowRecommendation {
+  robot_id: string;
+  recommended_start: string;
+  recommended_end: string;
+  reason: string;
+}

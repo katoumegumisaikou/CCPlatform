@@ -106,6 +106,21 @@ type OTAPayload struct {
 	ErrorMsg   string `json:"error_msg"`   // 错误信息
 }
 
+// SensorPayload PHM 传感器消息，机器人周期上报关键部件的振动/温度/电气参数，用于故障预测与健康管理。
+// VibrationSamples 为可选的原始振动加速度采样序列，若设备侧已完成频谱分析，可直接上报 VibrationRMS/VibrationPeak。
+type SensorPayload struct {
+	RobotID              string    `json:"robot_id"`               // 机器人 ID
+	Timestamp            int64     `json:"timestamp"`              // 时间戳
+	Component            string    `json:"component"`              // 部件类型，见 model.Component* 常量
+	VibrationSamples     []float64 `json:"vibration_samples"`      // 原始振动加速度采样序列（可选，配合 SampleRateHz 做频谱分析）
+	SampleRateHz         float64   `json:"sample_rate_hz"`         // 采样率 (Hz)
+	VibrationRMS         *float64  `json:"vibration_rms"`          // 振动有效值，设备侧已计算时可直接上报
+	VibrationPeak        *float64  `json:"vibration_peak"`         // 振动峰值，设备侧已计算时可直接上报
+	WindingTemp          *float64  `json:"winding_temp"`           // 电机绕组温度 (℃)
+	ControllerTemp       *float64  `json:"controller_temp"`        // 控制器散热片温度 (℃)
+	InsulationResistMOhm *float64  `json:"insulation_resist_mohm"` // 绝缘电阻 (MΩ)
+}
+
 // MessageHandler 是 MQTT 消息处理器，实现了 mochi-mqtt 的 Hook 接口。
 // 通过 OnPublish 拦截所有发布消息，根据 Topic 路径分发到对应的处理函数。
 // 处理流程: 解析JSON → 更新数据库 → 通过 WebSocket 推送给前端。
@@ -119,6 +134,7 @@ type MessageHandler struct {
 	envRepo        *repository.EnvironmentDataRepo // 环境数据
 	cleanRepo      *repository.CleaningRecordRepo  // 清扫记录
 	taskRepo       *repository.TaskRepo            // 任务数据操作（clean 面积更新、work_status 联动）
+	sensorRepo     *repository.SensorDataRepo      // PHM 传感器数据（振动/温度/电气参数）
 	influx         *repository.InfluxWriter
 	wsHub          *ws.Hub // WebSocket 广播器
 }
@@ -132,6 +148,7 @@ func NewMessageHandler(wsHub *ws.Hub, influx *repository.InfluxWriter) *MessageH
 		envRepo:        repository.NewEnvironmentDataRepo(),
 		cleanRepo:      repository.NewCleaningRecordRepo(),
 		taskRepo:       repository.NewTaskRepo(),
+		sensorRepo:     repository.NewSensorDataRepo(),
 		influx:         influx,
 		wsHub:          wsHub,
 	}
@@ -178,7 +195,7 @@ func (h *MessageHandler) OnDisconnect(cl *mqtt.Client, err error, expire bool) {
 
 // OnPublish 核心方法：拦截所有发布消息，解析 Topic 并分发处理。
 // Topic 格式: tdw/robot/{robotID}/{消息类型}
-// 消息类型: heartbeat(心跳), position(位置), status(状态), alarm(告警)
+// 消息类型: heartbeat(心跳), position(位置), status(状态), alarm(告警), clean(清扫), ota(升级), sensor(PHM传感器)
 func (h *MessageHandler) OnPublish(cl *mqtt.Client, pk packets.Packet) (packets.Packet, error) {
 	topic := pk.TopicName
 	payload := pk.Payload
@@ -206,6 +223,8 @@ func (h *MessageHandler) OnPublish(cl *mqtt.Client, pk packets.Packet) (packets.
 		h.handleClean(robotID, payload)
 	case "ota":
 		h.handleOTA(robotID, payload)
+	case "sensor":
+		h.handleSensor(robotID, payload)
 	}
 
 	return pk, nil
@@ -597,6 +616,95 @@ func (h *MessageHandler) handleOTA(robotID string, payload []byte) {
 		"status":      msg.Status,
 		"error_msg":   msg.ErrorMsg,
 	}, time.Unix(msg.Timestamp, 0))
+}
+
+// handleSensor 处理 PHM 传感器消息：计算振动 RMS/峰值/峰值因子/主频，识别轴承故障特征，
+// 写入 robot_sensor_data 表供 PHMService 做健康评分与故障预测，并推送 InfluxDB + WebSocket。
+func (h *MessageHandler) handleSensor(robotID string, payload []byte) {
+	var msg SensorPayload
+	if err := json.Unmarshal(payload, &msg); err != nil {
+		log.Printf("[MQTT] Parse sensor error: %v", err)
+		return
+	}
+	if msg.Component == "" {
+		log.Printf("[MQTT] Sensor message missing component, robot=%s", robotID)
+		return
+	}
+
+	rms := 0.0
+	peak := 0.0
+	dominantFreq := 0.0
+	if len(msg.VibrationSamples) > 0 {
+		rms = util.ComputeRMS(msg.VibrationSamples)
+		peak = util.ComputePeak(msg.VibrationSamples)
+		dominantFreq = util.DominantFrequency(msg.VibrationSamples, msg.SampleRateHz)
+	}
+	if msg.VibrationRMS != nil {
+		rms = *msg.VibrationRMS
+	}
+	if msg.VibrationPeak != nil {
+		peak = *msg.VibrationPeak
+	}
+	crestFactor := util.CrestFactor(peak, rms)
+	bearingFlag := util.ClassifyBearingFault(dominantFreq, crestFactor)
+
+	data := &model.RobotSensorData{
+		RobotID:          robotID,
+		Component:        msg.Component,
+		VibrationRMS:     rms,
+		VibrationPeak:    peak,
+		CrestFactor:      crestFactor,
+		DominantFreqHz:   dominantFreq,
+		BearingFaultFlag: bearingFlag,
+		RecordTime:       time.Unix(msg.Timestamp, 0),
+	}
+	if msg.WindingTemp != nil {
+		data.WindingTemp = *msg.WindingTemp
+	}
+	if msg.ControllerTemp != nil {
+		data.ControllerTemp = *msg.ControllerTemp
+	}
+	if msg.InsulationResistMOhm != nil {
+		data.InsulationResistMOhm = *msg.InsulationResistMOhm
+	}
+
+	if err := h.sensorRepo.Create(data); err != nil {
+		log.Printf("[MQTT] Create sensor data error: %v", err)
+		return
+	}
+
+	influxFields := map[string]interface{}{
+		"component":          msg.Component,
+		"vibration_rms":      rms,
+		"vibration_peak":     peak,
+		"crest_factor":       crestFactor,
+		"dominant_freq_hz":   dominantFreq,
+		"bearing_fault_flag": bearingFlag,
+	}
+	if msg.WindingTemp != nil {
+		influxFields["winding_temp"] = *msg.WindingTemp
+	}
+	if msg.ControllerTemp != nil {
+		influxFields["controller_temp"] = *msg.ControllerTemp
+	}
+	if msg.InsulationResistMOhm != nil {
+		influxFields["insulation_resist_mohm"] = *msg.InsulationResistMOhm
+	}
+	h.writeInflux("robot_sensor", robotID, influxFields, time.Unix(msg.Timestamp, 0))
+
+	h.wsHub.BroadcastToAll(ws.Message{
+		Type: "sensor",
+		Data: map[string]interface{}{
+			"robot_id":           robotID,
+			"component":          msg.Component,
+			"vibration_rms":      rms,
+			"vibration_peak":     peak,
+			"crest_factor":       crestFactor,
+			"dominant_freq_hz":   dominantFreq,
+			"bearing_fault_flag": bearingFlag,
+			"timestamp":          msg.Timestamp,
+		},
+	})
 }
 
 func (h *MessageHandler) writeInflux(measurement, robotID string, fields map[string]interface{}, ts time.Time) {

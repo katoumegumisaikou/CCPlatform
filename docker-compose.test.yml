@@ -1,0 +1,38 @@
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: ccplatform-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: "1234"
+      MYSQL_DATABASE: ccplatform
+    ports:
+      - "3306:3306"
+    volumes:
+      - ccplatform-mysql-data:/var/lib/mysql
+      - ./migrations/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p1234"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  influxdb:
+    image: influxdb:2.7
+    container_name: ccplatform-influxdb
+    restart: unless-stopped
+    environment:
+      DOCKER_INFLUXDB_INIT_MODE: setup
+      DOCKER_INFLUXDB_INIT_USERNAME: admin
+      DOCKER_INFLUXDB_INIT_PASSWORD: adminpassword
+      DOCKER_INFLUXDB_INIT_ORG: ccplatform
+      DOCKER_INFLUXDB_INIT_BUCKET: robot_telemetry
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: "27eafbf1ea57aa892358f45edaabda242beb52ca9fafba4b50184070eb836bce"
+    ports:
+      - "8086:8086"
+    volumes:
+      - ccplatform-influx-data:/var/lib/influxdb2
+
+volumes:
+  ccplatform-mysql-data:
+  ccplatform-influx-data:
