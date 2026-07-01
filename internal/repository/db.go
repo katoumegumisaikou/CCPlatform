@@ -8,6 +8,10 @@ import (
 	"ccplatform/internal/model"
 	"fmt"
 
+	"log"
+	"os"
+	"time"
+
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -21,7 +25,14 @@ var DB *gorm.DB
 func InitDB() error {
 	var err error
 	DB, err = gorm.Open(mysql.Open(config.Cfg.Database.DSN()), &gorm.Config{
-		Logger:                                   logger.Default.LogMode(logger.Warn),
+		Logger: logger.New(
+			log.New(os.Stdout, "\r\n", log.LstdFlags),
+			logger.Config{
+				SlowThreshold:             200 * time.Millisecond,
+				LogLevel:                  logger.Warn,
+				IgnoreRecordNotFoundError: true,
+			},
+		),
 			DisableForeignKeyConstraintWhenMigrating: true,                                // 禁用迁移时的外键约束，避免与已有表结构冲突
 	})
 	if err != nil {
