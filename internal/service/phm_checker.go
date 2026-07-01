@@ -62,14 +62,33 @@ func (c *PHMChecker) checkAll() {
 		return
 	}
 
+	checkedCount := 0
+	riskRobotCount := 0
+	riskComponentCount := 0
+	errorCount := 0
+	errorSamples := make([]string, 0, 3)
+
 	for _, robot := range robots {
 		predictions, err := c.phmService.RunPredictionForRobot(robot.RobotID)
 		if err != nil {
-			log.Printf("[PHMChecker] Run prediction for robot %s error: %v", robot.RobotID, err)
+			errorCount++
+			if len(errorSamples) < 3 {
+				errorSamples = append(errorSamples, robot.RobotID+": "+err.Error())
+			}
 			continue
 		}
+		checkedCount++
 		if len(predictions) > 0 {
-			log.Printf("[PHMChecker] Robot %s has %d component(s) with fault risk", robot.RobotID, len(predictions))
+			riskRobotCount++
+			riskComponentCount += len(predictions)
 		}
 	}
+
+	if errorCount > 0 {
+		log.Printf("[PHMChecker] Checked %d/%d online robots, risk robots=%d, risk components=%d, errors=%d, samples=%v",
+			checkedCount, len(robots), riskRobotCount, riskComponentCount, errorCount, errorSamples)
+		return
+	}
+	log.Printf("[PHMChecker] Checked %d online robots, risk robots=%d, risk components=%d",
+		checkedCount, riskRobotCount, riskComponentCount)
 }

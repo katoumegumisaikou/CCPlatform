@@ -1,117 +1,94 @@
 package service
 
 import (
+	"ccplatform/internal/predictor"
 	"ccplatform/internal/repository"
-	"math"
 )
 
-// PredictionService 趋势预测服务，提供简化的效率预测、故障预测和策略优化。
+// PredictionService 趋势预测服务。
+// effPredictor 和 stratOptimizer 通过接口注入，换算法只需替换实现，service 层不动。
 type PredictionService struct {
-	stationRepo *repository.StationRepo
-	robotRepo   *repository.RobotRepo
-	taskRepo    *repository.TaskRepo
+	stationRepo    *repository.StationRepo
+	robotRepo      *repository.RobotRepo
+	taskRepo       *repository.TaskRepo
+	predRepo       *repository.FaultPredictionRepo
+	effPredictor   predictor.EfficiencyPredictor
+	stratOptimizer predictor.StrategyOptimizer
 }
 
 func NewPredictionService() *PredictionService {
 	return &PredictionService{
-		stationRepo: repository.NewStationRepo(),
-		robotRepo:   repository.NewRobotRepo(),
-		taskRepo:    repository.NewTaskRepo(),
+		stationRepo:    repository.NewStationRepo(),
+		robotRepo:      repository.NewRobotRepo(),
+		taskRepo:       repository.NewTaskRepo(),
+		predRepo:       repository.NewFaultPredictionRepo(),
+		effPredictor:   predictor.NewMovingAveragePredictor(),
+		stratOptimizer: predictor.NewRuleBasedStrategyOptimizer(),
 	}
 }
 
-// PredictEfficiency 基于移动平均法预测下一期清扫效率。
-func (s *PredictionService) PredictEfficiency(stationID string) (map[string]interface{}, error) {
+// PredictEfficiency 效率预测：返回过去 30 天历史 + 未来 7 天预测的时序数据点。
+func (s *PredictionService) PredictEfficiency(stationID string) ([]predictor.EfficiencyPoint, error) {
+	rows, err := s.taskRepo.GetDailyStatsByStation(stationID, 30)
+	if err != nil {
+		return nil, err
+	}
+
+	history := make([]predictor.DailyRecord, len(rows))
+	for i, r := range rows {
+		history[i] = predictor.DailyRecord{
+			Date:      r.Date,
+			Total:     r.Total,
+			Completed: r.Completed,
+		}
+	}
+
+	return s.effPredictor.Predict(history, 7), nil
+}
+
+// OptimizeStrategy 策略优化：返回基于当前电站状态的策略建议列表。
+func (s *PredictionService) OptimizeStrategy(stationID string) ([]predictor.StrategyItem, error) {
 	robots, err := s.robotRepo.GetByStationID(stationID)
 	if err != nil {
 		return nil, err
 	}
 
-	// 简化的移动平均预测
-	var totalBattery float64
-	onlineCount := 0
+	snap := predictor.StationSnapshot{
+		StationID:   stationID,
+		TotalRobots: len(robots),
+	}
 	for _, r := range robots {
 		if r.OnlineStatus == 1 {
-			onlineCount++
-			totalBattery += float64(r.BatteryLevel)
+			snap.OnlineCount++
+			snap.AvgBattery += float64(r.BatteryLevel)
+			if r.WorkStatus == 0 {
+				snap.IdleCount++
+			}
+			if r.WorkStatus == 2 { // 充电中
+				snap.ChargingCount++
+			}
 		}
 	}
-
-	avgBattery := 0.0
-	if onlineCount > 0 {
-		avgBattery = totalBattery / float64(onlineCount)
+	if snap.OnlineCount > 0 {
+		snap.AvgBattery /= float64(snap.OnlineCount)
 	}
 
-	predictedEfficiency := 2000.0 * (avgBattery / 100.0) // 基准效率 × 电量系数
-
-	return map[string]interface{}{
-		"station_id":             stationID,
-		"predicted_efficiency":   math.Round(predictedEfficiency*100) / 100,
-		"online_robot_count":     onlineCount,
-		"avg_battery_level":      math.Round(avgBattery*100) / 100,
-		"confidence":             "moderate",
-	}, nil
-}
-
-// PredictFaultProbability 预测机器人故障概率（简化线性模型）。
-func (s *PredictionService) PredictFaultProbability(robotID string) (map[string]interface{}, error) {
-	robot, err := s.robotRepo.GetByID(robotID)
-	if err != nil {
-		return nil, err
-	}
-
-	// 简化模型: 电量越低故障风险越高 + 工作状态
-	faultProb := 0.0
-	if robot.OnlineStatus == 1 {
-		faultProb = math.Max(0, (100-float64(robot.BatteryLevel))/100*0.3)
-		if robot.WorkStatus == 1 {
-			faultProb += 0.1
+	// 活跃故障预测风险统计。GetByStationID 已限定 status IN (0,1)，
+	// 已生成工单的预测仍代表设备风险，不能从调度策略里排除。
+	preds, _ := s.predRepo.GetByStationID(stationID)
+	snap.ActiveFaultPredictions = len(preds)
+	highRiskRobots := make(map[string]struct{})
+	mediumRiskRobots := make(map[string]struct{})
+	for _, p := range preds {
+		switch p.RiskLevel {
+		case "high":
+			highRiskRobots[p.RobotID] = struct{}{}
+		case "medium":
+			mediumRiskRobots[p.RobotID] = struct{}{}
 		}
 	}
-	faultProb = math.Min(faultProb, 1.0)
+	snap.HighFaultRobots = len(highRiskRobots)
+	snap.MediumFaultRobots = len(mediumRiskRobots)
 
-	riskLevel := "low"
-	if faultProb > 0.5 {
-		riskLevel = "high"
-	} else if faultProb > 0.2 {
-		riskLevel = "medium"
-	}
-
-	return map[string]interface{}{
-		"robot_id":       robotID,
-		"fault_probability": math.Round(faultProb*100) / 100,
-		"risk_level":     riskLevel,
-	}, nil
-}
-
-// OptimizeStrategy 最优清扫策略推荐（简化版）。
-func (s *PredictionService) OptimizeStrategy(stationID string) (map[string]interface{}, error) {
-	robots, err := s.robotRepo.GetByStationID(stationID)
-	if err != nil {
-		return nil, err
-	}
-
-	// 策略: 选择电量最高且在线的机器人优先清扫
-	var bestRobotID string
-	var maxBattery int8
-	for _, r := range robots {
-		if r.OnlineStatus == 1 && r.WorkStatus == 0 && r.BatteryLevel > maxBattery {
-			maxBattery = r.BatteryLevel
-			bestRobotID = r.RobotID
-		}
-	}
-
-	strategy := map[string]interface{}{
-		"station_id": stationID,
-		"total_robots": len(robots),
-	}
-	if bestRobotID != "" {
-		strategy["recommended_robot"] = bestRobotID
-		strategy["reason"] = "highest battery among idle online robots"
-	} else {
-		strategy["recommended_robot"] = nil
-		strategy["reason"] = "no idle online robot with sufficient battery"
-	}
-
-	return strategy, nil
+	return s.stratOptimizer.Optimize(snap), nil
 }

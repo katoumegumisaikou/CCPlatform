@@ -38,15 +38,11 @@ func (h *PredictionHandler) PredictEfficiency(c *gin.Context) {
 	response.OK(c, data)
 }
 
-// PredictFault 故障预测接口，支持按机器人或电站维度查询。
-// GET /api/v1/analytics/predictions/fault?robot_id=xx 或 ?station_id=xx
+// PredictFault 故障预测接口，支持按机器人、电站或全局维度查询。
+// GET /api/v1/analytics/predictions/fault?robot_id=xx 或 ?station_id=xx；不传参数时返回全部活跃预测。
 func (h *PredictionHandler) PredictFault(c *gin.Context) {
 	robotID := c.Query("robot_id")
 	stationID := c.Query("station_id")
-	if robotID == "" && stationID == "" {
-		response.Error(c, errcode.ErrParam)
-		return
-	}
 	data, err := h.phmSvc.PredictFaults(robotID, stationID)
 	if err != nil {
 		response.Error(c, errcode.ErrNotFound)

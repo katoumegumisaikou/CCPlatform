@@ -123,6 +123,11 @@ func (r *FaultPatternRepo) Create(p *model.FaultPattern) error {
 	return r.db.Create(p).Error
 }
 
+// CreateIfNotExists 幂等创建故障模式；已存在时不覆盖，便于运维在库中维护自定义知识。
+func (r *FaultPatternRepo) CreateIfNotExists(p *model.FaultPattern) error {
+	return r.db.Clauses(clause.OnConflict{DoNothing: true}).Create(p).Error
+}
+
 // GetByCode 根据故障模式编码查询单条记录。
 func (r *FaultPatternRepo) GetByCode(code string) (*model.FaultPattern, error) {
 	var p model.FaultPattern
@@ -170,10 +175,10 @@ func (r *FaultPredictionRepo) GetByID(id string) (*model.FaultPrediction, error)
 	return &p, err
 }
 
-// GetOpenByRobotComponent 查询指定机器人部件当前未处理(status=0)的预测记录，用于去重更新而非重复创建。
+// GetOpenByRobotComponent 查询指定机器人部件当前活跃(status=0/1)的预测记录，用于去重更新而非重复创建。
 func (r *FaultPredictionRepo) GetOpenByRobotComponent(robotID, component, patternCode string) (*model.FaultPrediction, error) {
 	var p model.FaultPrediction
-	err := r.db.Where("robot_id = ? AND component = ? AND pattern_code = ? AND status = 0", robotID, component, patternCode).
+	err := r.db.Where("robot_id = ? AND component = ? AND pattern_code = ? AND status IN ?", robotID, component, patternCode, []int8{0, 1}).
 		Order("create_time DESC").First(&p).Error
 	return &p, err
 }
@@ -181,14 +186,24 @@ func (r *FaultPredictionRepo) GetOpenByRobotComponent(robotID, component, patter
 // GetByRobotID 查询指定机器人的故障预测记录（按创建时间倒序）。
 func (r *FaultPredictionRepo) GetByRobotID(robotID string) ([]model.FaultPrediction, error) {
 	var list []model.FaultPrediction
-	err := r.db.Where("robot_id = ?", robotID).Order("create_time DESC").Find(&list).Error
+	err := r.db.Where("robot_id = ? AND status IN ?", robotID, []int8{0, 1}).
+		Order("create_time DESC").Find(&list).Error
 	return list, err
 }
 
 // GetByStationID 查询指定电站下所有机器人的故障预测记录（按创建时间倒序）。
 func (r *FaultPredictionRepo) GetByStationID(stationID string) ([]model.FaultPrediction, error) {
 	var list []model.FaultPrediction
-	err := r.db.Where("station_id = ?", stationID).Order("create_time DESC").Find(&list).Error
+	err := r.db.Where("station_id = ? AND status IN ?", stationID, []int8{0, 1}).
+		Order("create_time DESC").Find(&list).Error
+	return list, err
+}
+
+// GetAll 查询所有活跃故障预测记录（按创建时间倒序）。
+func (r *FaultPredictionRepo) GetAll() ([]model.FaultPrediction, error) {
+	var list []model.FaultPrediction
+	err := r.db.Where("status IN ?", []int8{0, 1}).
+		Order("create_time DESC").Find(&list).Error
 	return list, err
 }
 

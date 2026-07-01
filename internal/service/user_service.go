@@ -7,6 +7,7 @@ import (
 	"ccplatform/pkg/util"
 	"errors"
 	"fmt"
+	"log"
 	"time"
 
 	"gorm.io/gorm"
@@ -113,6 +114,7 @@ func (s *UserService) Login(username, password, ip string) (string, error) {
 func (s *UserService) recordLoginLog(userID, username, ip string, result int8, failReason string) {
 	logRepo := repository.NewLoginLogRepo()
 	entry := &model.LoginLog{
+		LogID:       util.GenerateID(),
 		UserID:      userID,
 		Username:    username,
 		LoginIP:     ip,
@@ -121,7 +123,9 @@ func (s *UserService) recordLoginLog(userID, username, ip string, result int8, f
 		FailReason:  failReason,
 	}
 	go func() {
-		_ = logRepo.Create(entry)
+		if err := logRepo.Create(entry); err != nil {
+			log.Printf("[UserService] record login log error: %v", err)
+		}
 	}()
 }
 
