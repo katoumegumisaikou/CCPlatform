@@ -8,7 +8,7 @@ import {
   ScheduleOutlined, AlertOutlined, BarChartOutlined,
   SettingOutlined, CloudServerOutlined, ToolOutlined,
   CameraOutlined, UserOutlined, LogoutOutlined, MenuFoldOutlined,
-  MenuUnfoldOutlined, LineChartOutlined,
+  MenuUnfoldOutlined, LineChartOutlined, SecurityScanOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '../../store/authStore';
 
@@ -35,6 +35,7 @@ const menuItems = [
   { key: '/firmwares', icon: <CloudServerOutlined />, label: '固件管理' },
   { key: '/maintenance', icon: <ToolOutlined />, label: '维护保养' },
   { key: '/cameras', icon: <CameraOutlined />, label: '摄像头管理' },
+  { key: '/geofences', icon: <SecurityScanOutlined />, label: '电子围栏' },
 ];
 
 const breadcrumbMap: Record<string, string> = {
@@ -49,6 +50,7 @@ const breadcrumbMap: Record<string, string> = {
   '/firmwares': '固件管理',
   '/maintenance': '维护保养',
   '/cameras': '摄像头管理',
+  '/geofences': '电子围栏',
   '/system/users': '用户管理',
   '/system/roles': '角色管理',
 };

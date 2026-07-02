@@ -35,6 +35,7 @@ type Handlers struct {
 	Prediction     *handler.PredictionHandler
 	ReportTemplate *handler.ReportTemplateHandler
 	Backup         *handler.BackupHandler
+	Geofence       *handler.GeofenceHandler
 }
 
 func Setup(hub *ws.Hub, publisher *mqtt.Publisher, taskScheduler *scheduler.TaskScheduler) *gin.Engine {
@@ -73,6 +74,7 @@ func Setup(hub *ws.Hub, publisher *mqtt.Publisher, taskScheduler *scheduler.Task
 		Prediction:     handler.NewPredictionHandler(),
 		ReportTemplate: handler.NewReportTemplateHandler(),
 		Backup:         handler.NewBackupHandler(),
+		Geofence:       handler.NewGeofenceHandler(hub),
 	}
 
 	v1 := r.Group("/api/v1")
@@ -105,6 +107,7 @@ func Setup(hub *ws.Hub, publisher *mqtt.Publisher, taskScheduler *scheduler.Task
 	registerOrganizationRoutes(protected, h)
 	registerDeviceRoutes(protected, h)
 	registerReportRoutes(protected, h)
+	registerGeofenceRoutes(protected, h)
 
 	return r
 }

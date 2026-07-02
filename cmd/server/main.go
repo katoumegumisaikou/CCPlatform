@@ -92,10 +92,10 @@ func main() {
 	taskScheduler := scheduler.NewTaskScheduler(publisher)
 	go taskScheduler.Start()
 
-	// 8b. 启动故障预测与健康管理（PHM）检测器，每 5 分钟计算一次在线机器人健康指数并运行故障预测
-	phmService := service.NewPHMService()
-	phmChecker := service.NewPHMChecker(phmService, 5*time.Minute)
-	go phmChecker.Start()
+	// 8b. 启动电子围栏检测器，每 15 秒检测一次在线机器人位置是否触发围栏规则
+	geoService := service.NewGeofenceService(hub)
+	geofenceChecker := service.NewGeofenceChecker(geoService, 15*time.Second)
+	go geofenceChecker.Start()
 
 	// 9. 注册所有 HTTP 路由（REST API）
 	r := router.Setup(hub, publisher, taskScheduler)
@@ -123,7 +123,7 @@ func main() {
 
 	log.Println("Shutting down server...")
 
-	// 关闭顺序：HTTP → WebSocket → Scheduler → MQTT → DB
+	// 关闭顺序：HTTP → WebSocket → GeofenceChecker → Scheduler → MQTT → DB
 	// 超时 10 秒，超时后强制退出防止挂死
 	done := make(chan struct{})
 	go func() {
@@ -144,8 +144,8 @@ func main() {
 		// 3. 停止任务调度器（不再触发新任务）
 		taskScheduler.Stop()
 
-		// 3b. 停止 PHM 检测器
-		phmChecker.Stop()
+		// 3b. 停止电子围栏检测器
+		geofenceChecker.Stop()
 
 		// 4. 关闭 MQTT Broker（断开所有机器人连接）
 		if mqtt.Server != nil {
