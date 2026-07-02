@@ -8,10 +8,6 @@ import (
 	"ccplatform/internal/model"
 	"fmt"
 
-	"log"
-	"os"
-	"time"
-
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"

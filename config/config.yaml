@@ -4,9 +4,9 @@ server:
 
 database:
   host: 127.0.0.1
-  port: 3306
+  port: 3307
   user: root
-  password: "1234"
+  password: "root"
   dbname: ccplatform
   charset: utf8mb4
   max_idle_conns: 10
