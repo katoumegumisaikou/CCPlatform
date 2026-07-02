@@ -30,6 +30,16 @@ func (r *RobotRepo) GetByID(id string) (*model.Robot, error) {
 	return &robot, err
 }
 
+// GetByIDs 批量查询机器人，用于结果列表补充机器人名称。
+func (r *RobotRepo) GetByIDs(ids []string) ([]model.Robot, error) {
+	var robots []model.Robot
+	if len(ids) == 0 {
+		return robots, nil
+	}
+	err := r.db.Where("robot_id IN ?", ids).Find(&robots).Error
+	return robots, err
+}
+
 // Update 更新机器人信息（全量更新）。
 func (r *RobotRepo) Update(robot *model.Robot) error {
 	return r.db.Save(robot).Error
@@ -64,6 +74,13 @@ func (r *RobotRepo) List(page, size int, stationID string, robotType int, online
 func (r *RobotRepo) GetByStationID(stationID string) ([]model.Robot, error) {
 	var robots []model.Robot
 	err := r.db.Where("station_id = ?", stationID).Find(&robots).Error
+	return robots, err
+}
+
+// GetAll 查询所有机器人，用于异步全量预测刷新。
+func (r *RobotRepo) GetAll() ([]model.Robot, error) {
+	var robots []model.Robot
+	err := r.db.Find(&robots).Error
 	return robots, err
 }
 

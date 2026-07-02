@@ -125,6 +125,26 @@ func (r *TaskRepo) GetActiveByRobot(robotID string) (*model.Task, error) {
 	return &task, nil
 }
 
+// DailyTaskStat 按日聚合的任务统计。
+type DailyTaskStat struct {
+	Date      string  `json:"date"`
+	Total     int64   `json:"total"`
+	Completed int64   `json:"completed"`
+	AreaSum   float64 `json:"area_sum"`
+}
+
+// GetDailyStatsByStation 查询指定电站最近 days 天的每日任务统计。
+func (r *TaskRepo) GetDailyStatsByStation(stationID string, days int) ([]DailyTaskStat, error) {
+	var rows []DailyTaskStat
+	err := r.db.Model(&model.Task{}).
+		Where("station_id = ? AND create_time >= DATE_SUB(CURDATE(), INTERVAL ? DAY)", stationID, days).
+		Select("DATE(create_time) as date, COUNT(*) as total, SUM(task_status=2) as completed, COALESCE(SUM(clean_area),0) as area_sum").
+		Group("DATE(create_time)").
+		Order("date ASC").
+		Scan(&rows).Error
+	return rows, err
+}
+
 // SumTodayCleanArea 统计今日已完成任务的累计清扫面积（㎡），用于仪表盘展示。
 // 仅统计 task_status=2（已完成）且 actual_end 在今天的任务。
 func (r *TaskRepo) SumTodayCleanArea() (float64, error) {

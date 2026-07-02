@@ -175,46 +175,46 @@ const DashboardPage: React.FC = () => {
           <Col xs={24} sm={12} lg={6}>
             <Card>
               <Statistic
-                title="电站总数"
-                value={data?.station_count ?? 0}
-                prefix={<BankOutlined />}
-                valueStyle={{ color: '#1677ff' }}
-              />
+	                title="电站总数"
+	                value={data?.station_count ?? 0}
+	                prefix={<BankOutlined />}
+	                styles={{ content: { color: '#1677ff' } }}
+	              />
             </Card>
           </Col>
 
           <Col xs={24} sm={12} lg={6}>
             <Card>
               <Statistic
-                title="在线机器人"
-                value={robotOnlineCount}
-                prefix={<RobotOutlined />}
-                valueStyle={{ color: '#52c41a' }}
-              />
+	                title="在线机器人"
+	                value={robotOnlineCount}
+	                prefix={<RobotOutlined />}
+	                styles={{ content: { color: '#52c41a' } }}
+	              />
             </Card>
           </Col>
 
           <Col xs={24} sm={12} lg={6}>
             <Card>
               <Statistic
-                title="运行中任务"
-                value={data?.running_tasks ?? 0}
-                prefix={<PlayCircleOutlined />}
-                valueStyle={{ color: '#faad14' }}
-              />
+	                title="运行中任务"
+	                value={data?.running_tasks ?? 0}
+	                prefix={<PlayCircleOutlined />}
+	                styles={{ content: { color: '#faad14' } }}
+	              />
             </Card>
           </Col>
 
           <Col xs={24} sm={12} lg={6}>
             <Card>
               <Statistic
-                title="未处理告警"
-                value={data?.unhandled_alarms ?? 0}
-                prefix={<WarningOutlined />}
-                valueStyle={{
-                  color: data?.unhandled_alarms ? '#ff4d4f' : '#52c41a',
-                }}
-              />
+	                title="未处理告警"
+	                value={data?.unhandled_alarms ?? 0}
+	                prefix={<WarningOutlined />}
+	                styles={{
+	                  content: { color: data?.unhandled_alarms ? '#ff4d4f' : '#52c41a' },
+	                }}
+	              />
             </Card>
           </Col>
         </Row>
@@ -226,10 +226,10 @@ const DashboardPage: React.FC = () => {
               <Statistic
                 title="今日清扫面积"
                 value={data?.today_clean_area ?? 0}
-                suffix="m²"
-                prefix={<ThunderboltOutlined />}
-                valueStyle={{ color: '#1677ff', fontSize: 32 }}
-              />
+	                suffix="m²"
+	                prefix={<ThunderboltOutlined />}
+	                styles={{ content: { color: '#1677ff', fontSize: 32 } }}
+	              />
             </Card>
           </Col>
 

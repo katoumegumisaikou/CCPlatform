@@ -495,11 +495,11 @@ export default function AlarmsPage() {
             {Object.entries(ALARM_LEVEL_MAP).map(([level, cfg]) => (
               <Col span={4} key={level}>
                 <Card size="small">
-                  <Statistic
-                    title={`${cfg.text}告警`}
-                    value={alarmStats.byLevel[level] || 0}
-                    valueStyle={{ color: cfg.color }}
-                  />
+	                  <Statistic
+	                    title={`${cfg.text}告警`}
+	                    value={alarmStats.byLevel[level] || 0}
+	                    styles={{ content: { color: cfg.color } }}
+	                  />
                 </Card>
               </Col>
             ))}
