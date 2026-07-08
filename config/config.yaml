@@ -4,9 +4,9 @@ server:
 
 database:
   host: 127.0.0.1
-  port: 3307
-  user: root
-  password: "root"
+  port: 3306
+  user: ccplatform
+  password: "ccplatform"
   dbname: ccplatform
   charset: utf8mb4
   max_idle_conns: 10
@@ -63,3 +63,9 @@ backup:
 video:
   stream_type: hls
   max_viewers: 100
+
+heweather:
+  api_token: ""
+  base_url: "https://devapi.qweather.com/v7/"
+  air_url: "https://devapi.qweather.com/v7/"
+  refresh_interval: 15

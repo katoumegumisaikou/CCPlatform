@@ -64,6 +64,16 @@ func InitDB() error {
 		&model.PasswordReset{},
 		&model.Geofence{},
 		&model.GeofenceAlarm{},
+		&model.WeatherNowCache{},
+		&model.WeatherDailyCache{},
+		&model.WeatherHourlyCache{},
+		&model.WeatherWarning{},
+		&model.WeatherAirQuality{},
+		&model.MicroWeatherStation{},
+		&model.MicroWeatherData{},
+		&model.CleaningDecisionRule{},
+		&model.ExtremeWeatherRule{},
+		&model.CleaningScheduleAdjustment{},
 	); err != nil {
 		return fmt.Errorf("auto migrate: %w", err)
 	}

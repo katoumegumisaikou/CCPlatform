@@ -18,6 +18,10 @@ import Cameras from './pages/Cameras';
 import System from './pages/System';
 import Profile from './pages/Profile';
 import Geofences from './pages/Geofences';
+import Weather from './pages/Weather';
+import WeatherWarnings from './pages/Weather/Warnings';
+import WeatherHistory from './pages/Weather/History';
+import WeatherDecisions from './pages/Weather/Decisions';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const token = useAuthStore((s) => s.token);
@@ -68,6 +72,10 @@ export default function App() {
               <Route path="maintenance" element={<Maintenance />} />
               <Route path="cameras" element={<Cameras />} />
               <Route path="geofences" element={<Geofences />} />
+              <Route path="weather" element={<Weather />} />
+              <Route path="weather/warnings" element={<WeatherWarnings />} />
+              <Route path="weather/history" element={<WeatherHistory />} />
+              <Route path="weather/decisions" element={<WeatherDecisions />} />
               <Route path="system/*" element={<System />} />
               <Route path="profile" element={<Profile />} />
             </Route>

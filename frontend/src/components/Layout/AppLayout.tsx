@@ -9,6 +9,7 @@ import {
   SettingOutlined, CloudServerOutlined, ToolOutlined,
   CameraOutlined, UserOutlined, LogoutOutlined, MenuFoldOutlined,
   MenuUnfoldOutlined, LineChartOutlined, SecurityScanOutlined,
+  CloudOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '../../store/authStore';
 
@@ -23,6 +24,17 @@ const menuItems = [
   { key: '/alarms', icon: <AlertOutlined />, label: '告警中心' },
   { key: '/analytics', icon: <BarChartOutlined />, label: '数据分析' },
   { key: '/predictions', icon: <LineChartOutlined />, label: '智能预测' },
+  {
+    key: '/weather',
+    icon: <CloudOutlined />,
+    label: '气象中心',
+    children: [
+      { key: '/weather', label: '气象仪表盘' },
+      { key: '/weather/warnings', label: '预警看板' },
+      { key: '/weather/history', label: '历史查询' },
+      { key: '/weather/decisions', label: '清扫决策' },
+    ],
+  },
   {
     key: '/system',
     icon: <SettingOutlined />,
@@ -47,6 +59,10 @@ const breadcrumbMap: Record<string, string> = {
   '/alarms': '告警中心',
   '/analytics': '数据分析',
   '/predictions': '智能预测',
+  '/weather': '气象仪表盘',
+  '/weather/warnings': '预警看板',
+  '/weather/history': '历史查询',
+  '/weather/decisions': '清扫决策',
   '/firmwares': '固件管理',
   '/maintenance': '维护保养',
   '/cameras': '摄像头管理',
@@ -82,7 +98,7 @@ export default function AppLayout() {
   };
 
   const selectedKeys = [location.pathname];
-  const openKeys = ['/system'];
+  const openKeys = ['/system', '/weather'];
 
   return (
     <Layout style={{ minHeight: '100vh' }}>

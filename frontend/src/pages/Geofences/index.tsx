@@ -1,8 +1,8 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Card, Table, Button, Space, Tag, Modal, Form, Input, InputNumber,
-  Select, message, Popconfirm, Typography, Tabs, Descriptions, Empty,
-  Spin, Badge, Divider, Tooltip, Switch, Row, Col, App,
+  Select, Popconfirm, Typography, Tabs, Descriptions, Empty,
+  Badge, Divider, Tooltip, Row, Col, App,
 } from 'antd';
 import type { TabsProps } from 'antd';
 import {
@@ -142,9 +142,9 @@ export default function Geofences() {
   // 地图绘制功能
   // =====================================================================
 
-  const initMap = useCallback((center?: [number, number]) => {
+  const initMap = useCallback((center?: [number, number]): L.Map | undefined => {
     const container = mapContainerRef.current;
-    if (!container) return;
+    if (!container) return undefined;
 
     // 清理旧地图
     if (mapRef.current) {
@@ -179,6 +179,7 @@ export default function Geofences() {
         });
       });
     }
+    return map;
   }, [form]);
 
   const drawCircleOnMap = (lat: number, lng: number, radius: number) => {
@@ -240,7 +241,8 @@ export default function Geofences() {
           form.getFieldValue('center_lat') || 39.9,
           form.getFieldValue('center_lng') || 116.4,
         ];
-        initMap(center);
+        const map = initMap(center);
+        if (!map) return;
 
         // 恢复已绘制的围栏
         const fenceType = form.getFieldValue('fence_type');
@@ -249,21 +251,19 @@ export default function Geofences() {
           const lat = form.getFieldValue('center_lat');
           const lng = form.getFieldValue('center_lng');
           const radius = form.getFieldValue('radius') || 50;
-          if (mapRef.current) {
-            drawnLayerRef.current = L.circle([lat, lng], {
-              radius, color, fillColor: color, fillOpacity: 0.15, weight: 2,
-            }).addTo(mapRef.current);
-            mapRef.current.setView([lat, lng], 16);
-          }
+          drawnLayerRef.current = L.circle([lat, lng], {
+            radius, color, fillColor: color, fillOpacity: 0.15, weight: 2,
+          }).addTo(map);
+          map.setView([lat, lng], 16);
         } else if (fenceType === 2 && form.getFieldValue('points')) {
           try {
             const pts: [number, number][] = JSON.parse(form.getFieldValue('points'));
-            if (pts.length >= 3 && mapRef.current) {
+            if (pts.length >= 3) {
               const latlngs = pts.map((p) => [p[1], p[0]] as [number, number]);
               drawnLayerRef.current = L.polygon(latlngs, {
                 color, fillColor: color, fillOpacity: 0.15, weight: 2,
-              }).addTo(mapRef.current);
-              mapRef.current.fitBounds(drawnLayerRef.current.getBounds().pad(0.2));
+              }).addTo(map);
+              map.fitBounds(drawnLayerRef.current.getBounds().pad(0.2));
             }
           } catch { /* ignore */ }
         }
@@ -363,7 +363,7 @@ export default function Geofences() {
     },
     {
       title: '动作', dataIndex: 'action_type', key: 'action_type', width: 100,
-      render: (v: number, r: Geofence) => (
+      render: (v: number) => (
         <Tag color={v === 1 ? 'red' : 'blue'}>{ACTION_TYPE_MAP[v] ?? '未知'}</Tag>
       ),
     },

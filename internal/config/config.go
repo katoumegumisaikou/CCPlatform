@@ -12,16 +12,17 @@ import (
 
 // Config 是平台的顶层配置结构，对应 config.yaml 的根节点。
 type Config struct {
-	Server   ServerConfig   `mapstructure:"server"`   // HTTP 服务器配置
-	Database DatabaseConfig `mapstructure:"database"` // MySQL 数据库配置
-	InfluxDB InfluxDBConfig `mapstructure:"influxdb"` // InfluxDB 时序数据库配置
-	MQTT     MQTTConfig     `mapstructure:"mqtt"`     // MQTT Broker 配置
-	JWT      JWTConfig      `mapstructure:"jwt"`      // JWT 认证配置
-	Log      LogConfig      `mapstructure:"log"`      // 日志配置
-	Notify   NotifyConfig   `mapstructure:"notify"`   // 通知渠道配置
-	OTA      OTAConfig      `mapstructure:"ota"`      // OTA 固件升级配置
-	Backup   BackupConfig   `mapstructure:"backup"`   // 数据备份配置
-	Video    VideoConfig    `mapstructure:"video"`    // 视频监控配置
+	Server    ServerConfig    `mapstructure:"server"`    // HTTP 服务器配置
+	Database  DatabaseConfig  `mapstructure:"database"`  // MySQL 数据库配置
+	InfluxDB  InfluxDBConfig  `mapstructure:"influxdb"`  // InfluxDB 时序数据库配置
+	MQTT      MQTTConfig      `mapstructure:"mqtt"`      // MQTT Broker 配置
+	JWT       JWTConfig       `mapstructure:"jwt"`       // JWT 认证配置
+	Log       LogConfig       `mapstructure:"log"`       // 日志配置
+	Notify    NotifyConfig    `mapstructure:"notify"`    // 通知渠道配置
+	OTA       OTAConfig       `mapstructure:"ota"`       // OTA 固件升级配置
+	Backup    BackupConfig    `mapstructure:"backup"`    // 数据备份配置
+	Video     VideoConfig     `mapstructure:"video"`     // 视频监控配置
+	HeWeather HeWeatherConfig `mapstructure:"heweather"` // 和风天气 API 配置
 }
 
 // InfluxDBConfig InfluxDB v2 写入配置，用于存储 MQTT 采集到的时序数据。
@@ -117,6 +118,14 @@ type BackupConfig struct {
 type VideoConfig struct {
 	StreamType string `mapstructure:"stream_type"` // 默认流转发类型: rtsp/hls/webrtc
 	MaxViewers int    `mapstructure:"max_viewers"` // 每路视频最大同时观看数
+}
+
+// HeWeatherConfig 和风天气 API 配置。
+type HeWeatherConfig struct {
+	APIToken        string `mapstructure:"api_token"`        // Web API Key
+	BaseURL         string `mapstructure:"base_url"`         // 天气 API 基础地址，需以 /v7/ 结尾
+	AirURL          string `mapstructure:"air_url"`          // 空气质量 API 基础地址
+	RefreshInterval int    `mapstructure:"refresh_interval"` // 自动刷新间隔（分钟）
 }
 
 // Cfg 是全局配置实例，Load() 成功后可直接使用 config.Cfg.XXX 访问。
