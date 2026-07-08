@@ -355,3 +355,203 @@ export interface GeofenceAlarm {
   handle_remark: string;
   create_time: string;
 }
+
+// ===== 气象联动 =====
+
+export interface WeatherNow {
+  location_id: string;
+  station_id: string;
+  obs_time: string;
+  temp: string;
+  feels_like: string;
+  icon: string;
+  text: string;
+  wind_dir: string;
+  wind_scale: string;
+  wind_speed: string;
+  humidity: string;
+  precip: string;
+  pressure: string;
+  vis: string;
+  cloud: string;
+  update_time: string;
+}
+
+export interface WeatherDaily {
+  location_id: string;
+  fx_date: string;
+  station_id: string;
+  sunrise: string;
+  sunset: string;
+  temp_max: string;
+  temp_min: string;
+  icon_day: string;
+  text_day: string;
+  icon_night: string;
+  text_night: string;
+  wind_dir_day: string;
+  wind_scale_day: string;
+  humidity: string;
+  precip: string;
+  uv_index: string;
+  update_time: string;
+}
+
+export interface WeatherHourly {
+  location_id: string;
+  fx_time: string;
+  station_id: string;
+  temp: string;
+  icon: string;
+  text: string;
+  wind_dir: string;
+  wind_scale: string;
+  wind_speed: string;
+  humidity: string;
+  precip: string;
+  pressure: string;
+  cloud: string;
+  update_time: string;
+}
+
+export interface WeatherWarning {
+  location_id: string;
+  warning_id: string;
+  station_id: string;
+  sender: string;
+  pub_time: string;
+  title: string;
+  start_time: string;
+  end_time: string;
+  status: string;
+  level: string;
+  type: string;
+  type_name: string;
+  text: string;
+  update_time: string;
+}
+
+export interface WeatherAirQuality {
+  location_id: string;
+  station_id: string;
+  pub_time: string;
+  aqi: string;
+  level: string;
+  category: string;
+  primary: string;
+  pm10: string;
+  pm2p5: string;
+  no2: string;
+  so2: string;
+  co: string;
+  o3: string;
+  update_time: string;
+}
+
+export interface CleaningDecisionRule {
+  rule_id: string;
+  rule_name: string;
+  station_id: string;
+  conditions: string;
+  dust_rule: string;
+  priority: number;
+  status: number;
+  remark: string;
+  create_time: string;
+  update_time: string;
+}
+
+export interface ExtremeWeatherRule {
+  rule_id: string;
+  rule_name: string;
+  station_id: string;
+  weather_type: string;
+  trigger_cond: string;
+  action: string;
+  recovery_cond: string;
+  status: number;
+  remark: string;
+  create_time: string;
+  update_time: string;
+}
+
+export interface CleaningAdvice {
+  suggested_action: string;
+  reason: string;
+  dust_score: number;
+  weather_score: number;
+  triggered_warnings: WeatherWarning[];
+  recommended_time: string;
+}
+
+export interface CleaningScheduleAdjustment {
+  id: number;
+  station_id: string;
+  current_freq: string;
+  suggested_freq: string;
+  reason: string;
+  analysis_data: string;
+  status: number;
+  create_time: string;
+}
+
+// ===== PHM / 智能预测 =====
+
+export type PhmComponent =
+  | 'drive_motor'
+  | 'brush_motor'
+  | 'battery'
+  | 'controller'
+  | 'sensor'
+  | 'transmission';
+
+export interface HealthComponent {
+  id: number;
+  robot_id: string;
+  component: PhmComponent;
+  health_score: number;
+  health_level: 'green' | 'yellow' | 'orange' | 'red';
+  degrade_rate: number;
+  metrics: string;
+  update_time: string;
+  create_time: string;
+}
+
+export interface HealthOverview {
+  robot_id: string;
+  robot_name?: string;
+  overall_score: number;
+  overall_level: 'green' | 'yellow' | 'orange' | 'red';
+  components: HealthComponent[];
+}
+
+export interface HealthTrendPoint {
+  id: number;
+  robot_id: string;
+  component: PhmComponent;
+  health_score: number;
+  record_time: string;
+}
+
+export interface HealthTrend {
+  robot_id: string;
+  component: PhmComponent;
+  points: HealthTrendPoint[];
+  prev_period_avg?: number;
+  curr_period_avg?: number;
+  change_rate?: number;
+  trend_note?: string;
+}
+
+export interface SparePartForecastItem {
+  part_name: string;
+  expected_qty: number;
+  related_fault_count: number;
+}
+
+export interface MaintenanceWindowRecommendation {
+  robot_id: string;
+  recommended_start: string;
+  recommended_end: string;
+  reason: string;
+}

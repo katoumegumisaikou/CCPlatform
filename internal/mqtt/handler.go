@@ -48,16 +48,25 @@ type PositionPayload struct {
 // StatusPayload 运行状态消息，机器人每10秒上报一次。
 // 包含运行参数和环境传感器数据。
 type StatusPayload struct {
-	RobotID      string   `json:"robot_id"`      // 机器人 ID
-	Timestamp    int64    `json:"timestamp"`     // 时间戳
-	PosX         float64  `json:"pos_x"`         // X 坐标 (m)
-	PosY         float64  `json:"pos_y"`         // Y 坐标 (m)
-	PosZ         float64  `json:"pos_z"`         // Z 坐标 (m)
-	Heading      float64  `json:"heading"`       // 朝向角度 (度)
-	GPSLongitude *float64 `json:"gps_longitude"` // GPS 经度
-	GPSLatitude  *float64 `json:"gps_latitude"`  // GPS 纬度
-	GPSAltitude  *float64 `json:"gps_altitude"`  // GPS 高度
-	GPSAccuracy  *float64 `json:"gps_accuracy"`  // GPS 精度
+	RobotID                 string   `json:"robot_id"`                   // 机器人 ID
+	Timestamp               int64    `json:"timestamp"`                  // 时间戳
+	WorkStatus              int8     `json:"work_status"`                // 工作状态
+	Speed                   float64  `json:"speed"`                      // 速度 (m/s)
+	CleanArea               float64  `json:"clean_area"`                 // 累计清扫面积 (㎡)
+	FaultCode               int      `json:"fault_code"`                 // 故障码
+	Temperature             float64  `json:"temperature"`                // 温度 (℃)
+	Humidity                float64  `json:"humidity"`                   // 湿度 (%)
+	LightIntensity          float64  `json:"light_intensity"`            // 光照强度 (lux)
+	WindSpeed               float64  `json:"wind_speed"`                 // 风速 (m/s)
+	BatteryVoltage          *float64 `json:"battery_voltage"`            // 主电池电压
+	FaultStatus             *int8    `json:"fault_status"`               // 故障状态
+	WorkPeriod              *int8    `json:"work_period"`                // 工作时段
+	SignalStrength          *int     `json:"signal_strength"`            // 综合信号强度
+	Signal4GStrength        *int     `json:"signal_4g_strength"`         // 4G 信号强度
+	RunDurationSeconds      *int64   `json:"run_duration_seconds"`       // 运行时长
+	CartBatteryVoltage      *float64 `json:"cart_battery_voltage"`       // 清扫小车电池电压
+	CartLowVoltageStatus    *int8    `json:"cart_low_voltage_status"`    // 清扫小车低压状态
+	ShuttleBatteryVoltage   *float64 `json:"shuttle_battery_voltage"`    // 接驳车电池电压
 	ShuttleLowVoltageStatus *int8    `json:"shuttle_low_voltage_status"` // 接驳车低压状态
 	ShuttleMotorCurrent     *float64 `json:"shuttle_motor_current"`      // 接驳车电机电流
 	CartCleanMotorCurrent   *float64 `json:"cart_clean_motor_current"`   // 清扫电机电流
@@ -793,6 +802,66 @@ type escalationEntry struct {
 	WithinMin int  `json:"within_min"`
 	ToLevel   int8 `json:"to_level"`
 }
+
+type suppressionEntry struct {
+	WithinSec int `json:"within_sec"`
+}
+
+type alarmRuleEvalResult struct {
+	ShouldCreate bool
+	Escalated    bool
+	FinalLevel   int8
+}
+
+func (h *MessageHandler) evaluateAlarmRules(alarmType, robotID, stationID string, originalLevel int8) *alarmRuleEvalResult {
+	result := &alarmRuleEvalResult{
+		ShouldCreate: true,
+		FinalLevel:   originalLevel,
+	}
+
+	rules, err := repository.NewAlarmRuleRepo().GetByAlarmType(alarmType)
+	if err != nil || len(rules) == 0 {
+		return result
+	}
+
+	rule := pickMatchingRule(rules, robotID, stationID)
+	if rule == nil {
+		return result
+	}
+
+	if rule.SuppressionRule != "" {
+		var suppr suppressionEntry
+		if err := json.Unmarshal([]byte(rule.SuppressionRule), &suppr); err == nil && suppr.WithinSec > 0 {
+			if latest, err := h.alarmRepo.GetLatestAlarmTime(robotID, alarmType); err == nil && time.Since(*latest) < time.Duration(suppr.WithinSec)*time.Second {
+				log.Printf("[AlarmRule] Suppressed: %s robot=%s (window=%ds)", alarmType, robotID, suppr.WithinSec)
+				result.ShouldCreate = false
+				return result
+			}
+		}
+	}
+
+	if rule.EscalationRule != "" {
+		var entries []escalationEntry
+		if err := json.Unmarshal([]byte(rule.EscalationRule), &entries); err == nil {
+			for _, entry := range entries {
+				if entry.Count <= 0 || entry.WithinMin <= 0 || entry.ToLevel <= result.FinalLevel {
+					continue
+				}
+				count, err := h.alarmRepo.CountRecentByType(robotID, alarmType, entry.WithinMin)
+				if err != nil {
+					continue
+				}
+				if int(count)+1 >= entry.Count {
+					result.Escalated = true
+					result.FinalLevel = entry.ToLevel
+					log.Printf("[AlarmRule] Escalated: %s robot=%s level %d→%d (count=%d, threshold=%d, window=%dmin)",
+						alarmType, robotID, originalLevel, result.FinalLevel, count+1, entry.Count, entry.WithinMin)
+				}
+			}
+		}
+	}
+
+	return result
 }
 
 // pickMatchingRule 按 robot > station > global 优先级选取最匹配的规则。

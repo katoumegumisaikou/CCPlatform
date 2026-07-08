@@ -15,27 +15,29 @@ import (
 
 // Handlers 聚合所有 HTTP handler 实例，供各路由注册函数使用。
 type Handlers struct {
-	User           *handler.UserHandler
-	Station        *handler.StationHandler
-	Robot          *handler.RobotHandler
-	Task           *handler.TaskHandler
-	Alarm          *handler.AlarmHandler
-	Monitor        *handler.MonitorHandler
-	Analytics      *handler.AnalyticsHandler
-	SystemConfig   *handler.SystemConfigHandler
-	Dict           *handler.DictHandler
-	Organization   *handler.OrganizationHandler
-	Audit          *handler.AuditHandler
-	Firmware       *handler.FirmwareHandler
-	Maintenance    *handler.MaintenanceHandler
-	RobotConfig    *handler.RobotConfigHandler
-	AlarmRule      *handler.AlarmRuleHandler
-	Notify         *handler.NotifyHandler
-	Camera         *handler.CameraHandler
-	Prediction     *handler.PredictionHandler
-	ReportTemplate *handler.ReportTemplateHandler
-	Backup         *handler.BackupHandler
-	Geofence       *handler.GeofenceHandler
+	User             *handler.UserHandler
+	Station          *handler.StationHandler
+	Robot            *handler.RobotHandler
+	Task             *handler.TaskHandler
+	Alarm            *handler.AlarmHandler
+	Monitor          *handler.MonitorHandler
+	Analytics        *handler.AnalyticsHandler
+	SystemConfig     *handler.SystemConfigHandler
+	Dict             *handler.DictHandler
+	Organization     *handler.OrganizationHandler
+	Audit            *handler.AuditHandler
+	Firmware         *handler.FirmwareHandler
+	Maintenance      *handler.MaintenanceHandler
+	RobotConfig      *handler.RobotConfigHandler
+	AlarmRule        *handler.AlarmRuleHandler
+	Notify           *handler.NotifyHandler
+	Camera           *handler.CameraHandler
+	Prediction       *handler.PredictionHandler
+	ReportTemplate   *handler.ReportTemplateHandler
+	Backup           *handler.BackupHandler
+	Geofence         *handler.GeofenceHandler
+	Weather          *handler.WeatherHandler
+	CleaningDecision *handler.CleaningDecisionHandler
 }
 
 func Setup(hub *ws.Hub, publisher *mqtt.Publisher, taskScheduler *scheduler.TaskScheduler) *gin.Engine {
@@ -54,27 +56,29 @@ func Setup(hub *ws.Hub, publisher *mqtt.Publisher, taskScheduler *scheduler.Task
 
 	// Handler instances
 	h := &Handlers{
-		User:           handler.NewUserHandler(),
-		Station:        handler.NewStationHandler(),
-		Robot:          handler.NewRobotHandler(publisher),
-		Task:           handler.NewTaskHandler(publisher, taskScheduler),
-		Alarm:          handler.NewAlarmHandler(),
-		Monitor:        handler.NewMonitorHandler(),
-		Analytics:      handler.NewAnalyticsHandler(),
-		SystemConfig:   handler.NewSystemConfigHandler(),
-		Dict:           handler.NewDictHandler(),
-		Organization:   handler.NewOrganizationHandler(),
-		Audit:          handler.NewAuditHandler(),
-		Firmware:       handler.NewFirmwareHandler(publisher),
-		Maintenance:    handler.NewMaintenanceHandler(),
-		RobotConfig:    handler.NewRobotConfigHandler(),
-		AlarmRule:      handler.NewAlarmRuleHandler(),
-		Notify:         handler.NewNotifyHandler(),
-		Camera:         handler.NewCameraHandler(),
-		Prediction:     handler.NewPredictionHandler(),
-		ReportTemplate: handler.NewReportTemplateHandler(),
-		Backup:         handler.NewBackupHandler(),
-		Geofence:       handler.NewGeofenceHandler(hub),
+		User:             handler.NewUserHandler(),
+		Station:          handler.NewStationHandler(),
+		Robot:            handler.NewRobotHandler(publisher),
+		Task:             handler.NewTaskHandler(publisher, taskScheduler),
+		Alarm:            handler.NewAlarmHandler(),
+		Monitor:          handler.NewMonitorHandler(),
+		Analytics:        handler.NewAnalyticsHandler(),
+		SystemConfig:     handler.NewSystemConfigHandler(),
+		Dict:             handler.NewDictHandler(),
+		Organization:     handler.NewOrganizationHandler(),
+		Audit:            handler.NewAuditHandler(),
+		Firmware:         handler.NewFirmwareHandler(publisher),
+		Maintenance:      handler.NewMaintenanceHandler(),
+		RobotConfig:      handler.NewRobotConfigHandler(),
+		AlarmRule:        handler.NewAlarmRuleHandler(),
+		Notify:           handler.NewNotifyHandler(),
+		Camera:           handler.NewCameraHandler(),
+		Prediction:       handler.NewPredictionHandler(),
+		ReportTemplate:   handler.NewReportTemplateHandler(),
+		Backup:           handler.NewBackupHandler(),
+		Geofence:         handler.NewGeofenceHandler(hub),
+		Weather:          handler.NewWeatherHandler(),
+		CleaningDecision: handler.NewCleaningDecisionHandler(),
 	}
 
 	v1 := r.Group("/api/v1")
@@ -108,6 +112,8 @@ func Setup(hub *ws.Hub, publisher *mqtt.Publisher, taskScheduler *scheduler.Task
 	registerDeviceRoutes(protected, h)
 	registerReportRoutes(protected, h)
 	registerGeofenceRoutes(protected, h)
+	registerWeatherRoutes(protected, h)
+	registerCleaningDecisionRoutes(protected, h)
 
 	return r
 }

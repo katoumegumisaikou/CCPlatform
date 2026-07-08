@@ -56,7 +56,7 @@ func (c *Client) FetchWarning(location string) (*HfWarningResponse, error) {
 
 func (c *Client) FetchAirQuality(location string) (*HfAirQualityResponse, error) {
 	resp := &HfAirQualityResponse{}
-	err := c.getJSON(c.baseURL+"air/now", location, resp)
+	err := c.getJSON(c.airURL+"air/now", location, resp)
 	return resp, err
 }
 
